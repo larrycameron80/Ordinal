@@ -1,0 +1,320 @@
+import { Request, Response } from "express";
+import RunexTxModel from "../model/transaction.model";
+import { calcEstimateAmount } from "../utils/pool";
+import walletModel from "../model/wallet.model";
+import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT, sendBtc, sendRune } from "../utils/transfer";
+import { MEMPOOLAPI_URL } from "../config/config";
+import axios from "axios";
+import { getCurrentBlockheight } from "../utils/mempool";
+import { updateTxStatus } from "./transaction.controller";
+import { combinePsbt } from "../service/psbt.service";
+const RUNEX_RUNE_ID = "";
+
+export const swap = async (req: Request, res: Response) => {
+  const {
+    paymentAddress,
+    ordinalAddress,
+    baseAmount,
+    estimateAmount,
+    direction,
+  } = req.body;
+  try {
+    const newTx = new RunexTxModel({
+      txType: "wallet-swap-" + direction,
+      txId: "",
+      cardinalAddress: paymentAddress,
+      cardinalAddressPubkey: "",
+      ordinalAddress: ordinalAddress,
+      ordinalAddressPubkey: "",
+      btcAmount: direction == "rune" ? baseAmount : estimateAmount,
+      runeAmount: direction == "btc" ? baseAmount : estimateAmount,
+      status: "unconfirmed",
+      blockHeight: 0,
+    });
+    await newTx.save();
+
+    res.status(200).json({
+      success: true,
+      msg: "Successfully requested!",
+    });
+  } catch (error) {
+    console.log("Swap Transacrion Error =>", error);
+    res.status(404).json({
+      success: false,
+      msg: error,
+    });
+  }
+};
+
+export const handleSwapReqest = async (
+  paymentAddress: string,
+  ordinalAddress: string,
+  baseAmount: number,
+  estimateAmount: number,
+  direction: string
+) => {
+  try {
+    const estimate = await calcEstimateAmount(baseAmount, direction);
+    if (estimate < estimateAmount * 0.95) {
+      return {
+        success: false,
+        msg: "Your swap request is rejected because of slipeage problem!",
+      };
+    }
+
+    let btcVal = direction == "rune" ? baseAmount * -1 : estimate;
+    let runeVal = direction == "rune" ? estimate : baseAmount * -1;
+
+    const res = await walletModel.updateOne(
+      {
+        cardinalAddress: paymentAddress,
+        ordinalAddress: ordinalAddress,
+      },
+      {
+        $inc: {
+          btcValue: btcVal,
+          runeValue: runeVal,
+        },
+      }
+    );
+    return {
+      success: true,
+      msg: "Successfuly swaped.",
+    };
+  } catch (error) {
+    console.log("Handle Swap Request Error ");
+    return {
+      success: false,
+      error: error,
+    };
+  }
+};
+
+export const directSwap = async (
+  paymentAddress: string,
+  ordinalAddress: string,
+  baseAmount: number,
+  estimateAmount: number,
+  direction: string
+) => {
+  try {
+    console.log("direction =>", direction);
+    const estimate = await calcEstimateAmount(baseAmount, direction);
+    console.log("estimate =>", estimate);
+    if (estimate < estimateAmount * 0.95) {
+      let btcVal = direction == "rune" ? baseAmount : 0;
+      let runeVal = direction == "rune" ? 0 : baseAmount;
+
+      const res = await walletModel.updateOne(
+        {
+          cardinalAddress: paymentAddress,
+          ordinalAddress: ordinalAddress,
+        },
+        {
+          btcValue: btcVal,
+          runeValue: runeVal,
+        }
+      );
+      return {
+        success: false,
+        msg: "Your swap request is rejected because of slipeage problem! Your Btc/Rune tokens will be send to your Runex Wallet.",
+      };
+    }
+    let txId = "";
+    console.log("txId =>", txId);
+    // if (direction == "rune")
+    //   txId = await sendRune(ordinalAddress, estimate, RUNEX_RUNE_ID);
+    // else txId = await sendBtc(paymentAddress, estimate);
+
+    const blockHeight = await getCurrentBlockheight();
+    const newTx = new RunexTxModel({
+      txType: "swap-" + direction + "-process",
+      txId,
+      cardinalAddress: paymentAddress,
+      cardinalAddressPubkey: "",
+      ordinalAddress: ordinalAddress,
+      ordinalAddressPubkey: "",
+      btcAmount: direction == "rune" ? 0 : estimateAmount,
+      runeAmount: direction == "rune" ? estimateAmount : 0,
+      status: "unconfirmed",
+      blockHeight: blockHeight,
+    });
+
+    newTx.save();
+    console.log("new transaction", newTx);
+    return {
+      success: true,
+      msg: "Successfuly swaped.",
+    };
+  } catch (error) {
+    console.log("Handle Swap Request Error ", error);
+    return {
+      success: false,
+      error: error,
+    };
+  }
+};
+
+export const handleDirectSwap = async (
+  paymentAddress: string,
+  ordinalAddress: string,
+  baseAmount: number,
+  estimateAmount: number,
+  direction: string
+) => {
+  try {
+    const btcVal = direction == "rune" ? baseAmount * -1 : estimateAmount;
+    const runeVal = direction == "rune" ? estimateAmount : baseAmount * -1;
+    const res = await walletModel.updateOne(
+      {
+        cardinalAddress: paymentAddress,
+        ordinalAddress: ordinalAddress,
+      },
+      {
+        $inc: {
+          btcValue: btcVal,
+          runeValue: runeVal,
+        },
+      }
+    );
+    return {
+      success: true,
+      msg: "Successfuly swaped.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error,
+    };
+  }
+};
+
+
+export const getSendRunePsbt = async (req: Request, res: Response) => {
+  const {
+    senderPaymentAddress,
+    senderPaymnetPubKey,
+    senderOrdinalAddress,
+    senderOrdinalPubkey,
+    amount,
+    receiverOrdinalAddress,
+    runeId
+  } = req.body;
+  try {
+    console.log("Rune Id =>", req.body);
+    const psbt = await generateSendRunePSBT(
+      senderPaymentAddress,
+      senderPaymnetPubKey,
+      senderOrdinalAddress,
+      senderOrdinalPubkey,
+      amount,
+      receiverOrdinalAddress,
+      runeId);
+    return res.status(200).json({
+      success: true,
+      psbt: psbt.toHex()
+    })
+  } catch (error) {
+    console.log("Get send Rune Psbt =>", error);
+    return res.status(404).json({
+      success: false,
+      error: error
+    })
+  }
+}
+
+export const getSplitRunePsbt = async (req: Request, res: Response) => {
+  const {
+    senderAddress,
+    senderPubkey,
+    amount,
+    runeId
+  } = req.body;
+  try {
+    console.log("Rune Id =>", req.body);
+    const psbt = await generateSplitRunePSBT(senderAddress, senderPubkey, amount, runeId);
+    return res.status(200).json({
+      success: true,
+      psbt: psbt.psbt.toHex()
+    })
+  } catch (error) {
+    console.log("Get send Rune Psbt =>", error);
+    return res.status(404).json({
+      success: false,
+      error: error
+    })
+  }
+}
+
+export const getSendSplitedRunePsbt = async (req: Request, res: Response) => {
+  const {
+    psbt,
+    signedPsbt,
+    senderAddress,
+    senderPubkey,
+    amount,
+    receiverAddress,
+  } = req.body;
+
+  try {
+    const txId = await combinePsbt(psbt, signedPsbt);
+    console.log("txId =>", txId.payload);
+    const sendRunePsbt = await generateSendSplitedRunePSBT(senderAddress, senderPubkey, amount, txId.payload, receiverAddress);
+    return res.status(200).json({
+      success: true,
+      psbt: sendRunePsbt.psbt.toHex()
+    })
+  } catch (error) {
+    console.log("Generate send split rune psbt =>", error);
+    return res.status(404).json({
+      success: false,
+      error: error
+    })
+  }
+}
+
+
+export const broadcastPsbt = async (req: Request, res: Response) => {
+  const {
+    psbt, signedPsbt
+  } = req.body;
+
+  try {
+    const txId = await combinePsbt(psbt, signedPsbt);
+    console.log("txid =>", txId);
+    return res.status(200).json({
+      success: true,
+      txId: txId
+    })
+  } catch (error) {
+    console.log("Broadcast tx error =>", error);
+    return res.status(404).json({
+      success: false,
+      error: error
+    })
+  }
+
+}
+
+export const getSendBTCPsbt = async (req: Request, res: Response) => {
+  try {
+    const {
+      senderAddress,
+      senderPubkey,
+      receiverAddress,
+      amount
+    } = req.body;
+    const psbt = await generateSendBTCPSBT(senderAddress, senderPubkey, receiverAddress, amount);
+
+    return res.status(200).json({
+      success: true,
+      psbt: psbt.toHex()
+    })
+  } catch (error) {
+    console.log("Generate send btc error =>", error);
+    return res.status(404).json({
+      success: false,
+      error
+    })
+  }
+}

@@ -121,7 +121,7 @@ export const getRuneUtxoByAddress = async (address: string, runeId: string) => {
     start += res.data.data.utxo.length;
     if (start === res.data.data.total) break;
   }
-  return { runeUtxos: utxos, tokenSum, divisibility };
+  return { runeUtxos: utxos, tokenSum, divisibility: utxos[0].divisibility };
 };
 
 

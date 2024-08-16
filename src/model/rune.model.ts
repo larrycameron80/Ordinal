@@ -10,4 +10,4 @@ const RuneModel = new Schema(
     }
 );
 
-export default mongoose.model("RuneModel", RuneModel);
+export default mongoose.model("runemodels", RuneModel);

@@ -87,6 +87,12 @@ export const getSplitedRune = async (txId: string) => {
   return res.data.vout[2]
 }
 
+export const getUtxosByTxId = async (txId: string) => {
+  const res = await axios.get(`${MEMPOOLAPI_URL}/tx/${txId}`);
+  const length = res.data.vout.length;
+  return res.data.vout.slice(0, length - 1);
+}
+
 export const mempoolSocketInit = async () => {
   console.log("network =>", process.env.NETWORK);
   const { bitcoin: { websocket } } = mempoolJS({

@@ -173,10 +173,133 @@ export const generateSendBtcFromUser = async (
   };
 };
 
+export const calcFeeSendBtcToUser = async (
+  amount: number,
+  btcUtxos: any,
+  walletType: string
+) => {
+  const senderAddress = PAYMENT_ADDRESS;
+  const senderPubkey = PAYMENT_PUBKEY;
+  const receiverAddress = PAYMENT_ADDRESS;
+
+  const feeRate = await getFeeRate();
+
+  let fee = 1000;
+  let tempAmount = 0;
+  while (1) {
+    tempAmount = 0;
+    const psbt = new Bitcoin.Psbt({ network: network });
+
+    for (const utxo of btcUtxos) {
+      if (tempAmount < amount && utxo.value > 1000) {
+        tempAmount += utxo.value;
+
+        psbt.addInput({
+          hash: utxo.txid,
+          index: utxo.vout,
+          witnessUtxo: {
+            value: utxo.value,
+            script: RunexWallet.output,
+          },
+          tapInternalKey: Buffer.from(RunexWallet.publicKey, "hex").subarray(
+            1,
+            33
+          ),
+        });
+      }
+    }
+
+    psbt.addOutput({
+      address: receiverAddress,
+      value: amount,
+    });
+
+    psbt.addOutput({
+      address: senderAddress as string,
+      value: tempAmount - amount - fee,
+    });
+
+    const tweakedChildNode = keyPair.tweak(
+      Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
+    );
+
+    for (let i = 0; i < psbt.inputCount; i++) {
+      psbt.signInput(i, tweakedChildNode);
+      psbt.validateSignaturesOfInput(i, () => true);
+      psbt.finalizeInput(i);
+    }
+
+    const tx = psbt.extractTransaction();
+
+    const estimateFee = tx.virtualSize() * feeRate * 2;
+
+    console.log("Calc exact estimateFee =>", estimateFee);
+
+    if (fee == estimateFee) {
+      fee = estimateFee;
+      break;
+    } else {
+      fee = estimateFee;
+      continue;
+    }
+  }
+
+  return fee;
+};
+
 export const generateSendBtcToUser = async (
   receiverAddress: string,
   amount: number,
   receiverWalletType: string
 ) => {
+  delay(1500);
+  const senderAddress = PAYMENT_ADDRESS;
+  const senderPubkey = PAYMENT_PUBKEY;
+  amount *= 10 ** 8;
+  const psbt = new Bitcoin.Psbt({ network: network });
+  const btcUtxos = await getBtcUtxoByAddress(senderAddress);
 
+  let fee = await calcFeeSendBtcToUser(amount, btcUtxos, receiverWalletType);
+
+  let tempAmount = 0;
+
+  const signIndexes: number[] = [];
+  for (const utxo of btcUtxos) {
+    if (tempAmount < amount && utxo.value > 1000) {
+      tempAmount += utxo.value;
+      signIndexes.push(psbt.inputCount);
+
+      psbt.addInput({
+        hash: utxo.txid,
+        index: utxo.vout,
+        tapInternalKey: Buffer.from(senderPubkey, "hex").slice(1, 33),
+        witnessUtxo: {
+          value: utxo.value,
+          script: Buffer.from(utxo.scriptpubkey as string, "hex"),
+        },
+        sighashType: Bitcoin.Transaction.SIGHASH_ALL,
+      });
+    }
+  }
+
+  psbt.addOutput({
+    address: receiverAddress,
+    value: amount - fee,
+  });
+
+  psbt.addOutput({
+    address: senderAddress,
+    value: tempAmount - amount,
+  });
+
+  return {
+    psbt,
+    signIndexes,
+  };
 };
+
+export const generateSendRuneFromUser = async (
+
+) => {
+    
+}

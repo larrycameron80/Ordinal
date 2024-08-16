@@ -28,7 +28,7 @@ import { tweakSigner } from "../service/localWallet";
 import { getSplitedRune } from "./mempool";
 import { calcPlatformFee } from "./pool";
 const RUNEX_RUNE_ID = "";
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 Bitcoin.initEccLib(ecc);
 const network = TEST_MODE ? Bitcoin.networks.testnet : Bitcoin.networks.bitcoin;
@@ -50,6 +50,7 @@ const p2pktr = Bitcoin.payments.p2tr({
   network,
 });
 
+// Calc fee of psbt BTC from platform to User
 export const calcSendBTCFee = async (amount: number, btcUtxos: any) => {
   const senderAddress = PAYMENT_ADDRESS;
   const senderPubkey = PAYMENT_PUBKEY;
@@ -119,12 +120,16 @@ export const calcSendBTCFee = async (amount: number, btcUtxos: any) => {
   return fee;
 }
 
+
+// Send BTC from Platform to User
 export const generateSendBTCPSBT = async (
   senderAddress: string,
   senderPubkey: string,
   receiverAddress: string,
   amount: number
 ) => {
+  await delay(15000);
+
   amount *= 10 ** 8;
   const psbt = new Bitcoin.Psbt({ network: network });
   const btcUtxos = await getBtcUtxoByAddress(senderAddress as string);
@@ -171,6 +176,8 @@ export const generateSendRunePSBT = async (
   receiverOrdinalAddress: string,
   runeId: string
 ) => {
+  await delay(15000);
+
   console.log("log sender =>", senderPaymentAddress, senderPaymnetPubKey, senderOrdinalAddress, senderOrdinalPubkey, amount, receiverOrdinalAddress, runeId);
   const btcUtxos = await getBtcUtxoByAddress(senderPaymentAddress);
   const runeUtxos = await getRuneUtxoByAddress(senderOrdinalAddress, runeId);
@@ -271,6 +278,7 @@ export const generateSplitRunePSBT = async (
   amount: number,
   runeId: string
 ) => {
+  await delay(15000);
   console.log("log split rune ", senderAddress, senderPubKey, amount, runeId);
   const btcUtxos = await getBtcUtxoByAddress(senderAddress);
 

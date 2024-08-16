@@ -25,10 +25,14 @@ import {
 import { RuneId, Runestone, none } from "runelib";
 import { WIFWallet } from "./WIFWallet";
 import { tweakSigner } from "../service/localWallet";
-import { getSplitedRune } from "./mempool";
+import { getSplitedRune, getUtxosByTxId } from "./mempool";
 import { calcPlatformFee } from "./pool";
 import { WalletTypes } from "../config/config";
 import { delay } from "./transfer";
+import {
+  getUnconfirmedRuneUtxos,
+  updateUtxoState,
+} from "../controller/utxo.controller";
 
 Bitcoin.initEccLib(ecc);
 const network = TEST_MODE ? Bitcoin.networks.testnet : Bitcoin.networks.bitcoin;
@@ -313,6 +317,7 @@ export const calcFeeSendRuneFromUser = async (
   const senderOrdinalPubkey = ORDINAL_PUBKEY;
   const receiverOrdinalAddress = ORDINAL_ADDRESS;
 
+  const runeAmount = amount * 10 ** runeUtxos.divisibility;
   if (runeUtxos.tokenSum < amount) {
     throw "Invalid Amount";
   }
@@ -327,7 +332,7 @@ export const calcFeeSendRuneFromUser = async (
   let tokenSum = 0;
 
   for (const runeutxo of runeUtxos.runeUtxos) {
-    if (tokenSum < amount) {
+    if (tokenSum < runeAmount) {
       psbt.addInput({
         hash: runeutxo.txid,
         index: runeutxo.vout,
@@ -346,13 +351,13 @@ export const calcFeeSendRuneFromUser = async (
 
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
-    amount: amount,
+    amount: runeAmount,
     output: 2,
   });
 
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
-    amount: tokenSum - amount,
+    amount: tokenSum - runeAmount,
     output: 1,
   });
 
@@ -445,7 +450,9 @@ export const generateSendRuneFromUser = async (
   const paymentSignIndexs: number[] = [];
   const ordinalSignIndexs: number[] = [];
 
-  if (runeUtxos.tokenSum < amount) {
+  const runeAmount = amount * 10 ** runeUtxos.divisibility;
+
+  if (runeUtxos.tokenSum < runeAmount) {
     throw "Invalid Amount";
   }
 
@@ -459,7 +466,7 @@ export const generateSendRuneFromUser = async (
   let tokenSum = 0;
 
   for (const runeutxo of runeUtxos.runeUtxos) {
-    if (tokenSum < amount) {
+    if (tokenSum < runeAmount) {
       ordinalSignIndexs.push(psbt.inputCount);
       psbt.addInput({
         hash: runeutxo.txid,
@@ -473,19 +480,19 @@ export const generateSendRuneFromUser = async (
           script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
         },
       });
-      tokenSum += runeutxo.amount;
+      tokenSum += runeutxo.amount * 10 ** runeutxo.divisibility;
     }
   }
 
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
-    amount: amount,
+    amount: runeAmount,
     output: 2,
   });
 
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
-    amount: tokenSum - amount,
+    amount: tokenSum - runeAmount,
     output: 1,
   });
 
@@ -546,14 +553,271 @@ export const generateSendRuneFromUser = async (
   };
 };
 
+export const calcFeeSendRuneToUser = async (
+  amount: number,
+  runeId: string,
+  btcUtxos: any,
+  runeUtxos: any,
+  unconfirmedRuneUtxos: any,
+) => {
+  const senderPaymentAddress = PAYMENT_ADDRESS;
+  const senderPaymnetPubKey = PAYMENT_PUBKEY;
+  const senderOrdinalAddress = ORDINAL_ADDRESS;
+  const senderOrdinalPubkey = ORDINAL_PUBKEY;
+  const receiverOrdinalAddress = ORDINAL_ADDRESS;
+  const runeAmount = amount * 10 ** unconfirmedRuneUtxos[0].divisibility;
+
+  const runeBlockNumber = parseInt(runeId.split(":")[0]);
+  const runeTxout = parseInt(runeId.split(":")[1]);
+
+  const psbt = new Bitcoin.Psbt({ network: network });
+
+  let tokenSum = 0;
+  const edicts: any = [];
+  for (const runeutxo of unconfirmedRuneUtxos) {
+    if (tokenSum < runeAmount) {
+      psbt.addInput({
+        hash: runeutxo.txid,
+        index: runeutxo.vout,
+        tapInternalKey: Buffer.from(senderOrdinalPubkey as string, "hex").slice(
+          1,
+          33
+        ),
+        witnessUtxo: {
+          value: runeutxo.value,
+          script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+        },
+      });
+      tokenSum += runeutxo.amount;
+    }
+  }
+
+  if (tokenSum < runeAmount) {
+    for (const runeutxo of runeUtxos) {
+      if (tokenSum < runeAmount) {
+        psbt.addInput({
+          hash: runeutxo.txid,
+          index: runeutxo.vout,
+          tapInternalKey: Buffer.from(
+            senderOrdinalPubkey as string,
+            "hex"
+          ).slice(1, 33),
+          witnessUtxo: {
+            value: runeutxo.value,
+            script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+          },
+        });
+        tokenSum += runeutxo.amount;
+      }
+    }
+  }
+
+  edicts.push({
+    id: new RuneId(runeBlockNumber, runeTxout),
+    amount: runeAmount,
+    output: 2,
+  });
+  edicts.push({
+    id: new RuneId(runeBlockNumber, runeTxout),
+    amount: tokenSum - runeAmount,
+    output: 1,
+  });
+  const mintstone = new Runestone(edicts, none(), none(), none());
+
+  psbt.addOutput({
+    script: mintstone.encipher(),
+    value: 0,
+  });
+
+  psbt.addOutput({
+    address: receiverOrdinalAddress,
+    value: 546,
+  });
+
+  psbt.addOutput({
+    address: senderOrdinalAddress,
+    value: 546,
+  });
+
+  let fee = 1000;
+  let totalBtcAmount = 0;
+  const feeRate = await getFeeRate();
+
+  while (1) {
+    totalBtcAmount = 0;
+    for (const btcutxo of btcUtxos) {
+      if (totalBtcAmount < fee && btcutxo.value > 1000) {
+        totalBtcAmount += btcutxo.value;
+        psbt.addInput({
+          hash: btcutxo.txid,
+          index: btcutxo.vout,
+          tapInternalKey: Buffer.from(senderPaymnetPubKey, "hex").slice(1, 33),
+          witnessUtxo: {
+            script: RunexWallet.output,
+            value: btcutxo.value,
+          },
+        });
+      }
+    }
+
+    psbt.addOutput({
+      address: senderPaymentAddress,
+      value: totalBtcAmount - fee,
+    });
+
+    const tweakedChildNode = keyPair.tweak(
+      Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
+    );
+
+    for (let i = 0; i < psbt.inputCount; i++) {
+      psbt.signInput(i, tweakedChildNode);
+      psbt.validateSignaturesOfInput(i, () => true);
+      psbt.finalizeInput(i);
+    }
+
+    const tx = psbt.extractTransaction();
+
+    const estimateFee = tx.virtualSize() * feeRate * 2;
+
+    console.log("Calc exact estimateFee =>", estimateFee);
+
+    if (fee == estimateFee) {
+      fee = estimateFee;
+      break;
+    } else {
+      fee = estimateFee;
+      continue;
+    }
+  }
+
+  return 0;
+};
+
 export const generateSendRuneToUser = async (
   amount: number,
   receiverOrdinalAddress: string,
   runeId: string,
-  receiverWalletType: string
+  receiverWalletType: string,
+  txId: string
 ) => {
-    const senderPaymentAddress = PAYMENT_ADDRESS;
-    const senderPaymnetPubKey = PAYMENT_PUBKEY;
-    const senderOrdinalAddress = ORDINAL_ADDRESS;
-    const senderOrdinalPubkey = ORDINAL_PUBKEY;
-}
+  const senderPaymentAddress = PAYMENT_ADDRESS;
+  const senderPaymnetPubKey = PAYMENT_PUBKEY;
+  const senderOrdinalAddress = ORDINAL_ADDRESS;
+  const senderOrdinalPubkey = ORDINAL_PUBKEY;
+
+  await delay(1500);
+
+  const btcUtxos = await getUtxosByTxId(txId);
+  let unconfirmedRuneUtxos: any = await getUnconfirmedRuneUtxos(runeId);
+  let { runeUtxos } = await getRuneUtxoByAddress(senderOrdinalAddress, runeId);
+
+  const runeAmount = amount * 10 ** unconfirmedRuneUtxos[0].divisibility;
+
+  runeUtxos = runeUtxos.filter((utxo: any) => {
+    let temp = unconfirmedRuneUtxos.filter((x: any) => {
+      return x.txId == utxo.txId && x.vout == utxo.vout;
+    });
+    return temp.length;
+  });
+  const runeBlockNumber = parseInt(runeId.split(":")[0]);
+  const runeTxout = parseInt(runeId.split(":")[1]);
+
+  const psbt = new Bitcoin.Psbt({ network: network });
+
+  let tokenSum = 0;
+  const edicts: any = [];
+
+  for (const runeutxo of unconfirmedRuneUtxos) {
+    if (tokenSum < runeAmount) {
+      psbt.addInput({
+        hash: runeutxo.txid,
+        index: runeutxo.vout,
+        tapInternalKey: Buffer.from(senderOrdinalPubkey as string, "hex").slice(
+          1,
+          33
+        ),
+        witnessUtxo: {
+          value: runeutxo.value,
+          script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+        },
+      });
+      tokenSum += runeutxo.amount;
+      await updateUtxoState(runeutxo);
+    }
+  }
+
+  if (tokenSum < runeAmount) {
+    for (const runeutxo of runeUtxos) {
+      if (tokenSum < runeAmount) {
+        psbt.addInput({
+          hash: runeutxo.txid,
+          index: runeutxo.vout,
+          tapInternalKey: Buffer.from(
+            senderOrdinalPubkey as string,
+            "hex"
+          ).slice(1, 33),
+          witnessUtxo: {
+            value: runeutxo.value,
+            script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+          },
+        });
+        tokenSum += runeutxo.amount;
+      }
+    }
+  }
+
+  edicts.push({
+    id: new RuneId(runeBlockNumber, runeTxout),
+    amount: runeAmount,
+    output: 2,
+  });
+  edicts.push({
+    id: new RuneId(runeBlockNumber, runeTxout),
+    amount: tokenSum - runeAmount,
+    output: 1,
+  });
+  const mintstone = new Runestone(edicts, none(), none(), none());
+
+  psbt.addOutput({
+    script: mintstone.encipher(),
+    value: 0,
+  });
+
+  psbt.addOutput({
+    address: receiverOrdinalAddress,
+    value: 546,
+  });
+
+  psbt.addOutput({
+    address: senderOrdinalAddress,
+    value: 546,
+  });
+
+  let fee = await calcFeeSendRuneToUser(amount, runeId, btcUtxos, runeUtxos, unconfirmedRuneUtxos);
+
+  let totalBtcAmount = 0;
+
+  for (const btcutxo of btcUtxos) {
+    if (totalBtcAmount < fee && btcutxo.value > 1000) {
+      totalBtcAmount += btcutxo.value;
+      psbt.addInput({
+        hash: btcutxo.txid,
+        index: btcutxo.vout,
+        tapInternalKey: Buffer.from(senderPaymnetPubKey, "hex").slice(1, 33),
+        witnessUtxo: {
+          script: Buffer.from(btcutxo.scriptpubkey as string, "hex"),
+          value: btcutxo.value,
+        },
+      });
+    }
+  }
+
+  if (totalBtcAmount < fee) throw "Btc balance is not enough";
+
+  psbt.addOutput({
+    address: senderPaymentAddress,
+    value: totalBtcAmount - fee,
+  });
+
+  return psbt;
+};

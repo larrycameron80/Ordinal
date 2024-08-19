@@ -269,7 +269,7 @@ export const handleWithdraw = async (
 export const getWalletBalance = async (req: Request, res: Response) => {
   try {
     const { walletId } = req.body;
-    const balanceList = await BalanceModel.find({walletId});
+    const balanceList = await BalanceModel.find({ walletId });
     return res.status(200).json({
       success: true,
       balanceList
@@ -280,5 +280,46 @@ export const getWalletBalance = async (req: Request, res: Response) => {
       success: false,
       err
     })
+  }
+}
+
+export const updateWalletBalance = async (req: Request, res: Response) => {
+  try {
+    const {
+      walletId,
+      tokenId,
+      balance,
+      direct
+    } = req.body;
+
+    const balanceExist = await BalanceModel.findOne({ walletId: walletId, tokenId: tokenId });
+    if (balanceExist) {
+      if (direct == "withdraw" && balanceExist.balance < balance) {
+        return res.status(200).json({
+          success: false,
+          msg: "Your balance is not too enough!"
+        })
+      }
+      const updateBalance = direct == "deposit" ? balance : -1 * balance;
+      await BalanceModel.findOneAndUpdate({
+        walletId: walletId,
+        tokenId: tokenId
+      }, {
+        $inc: {
+          balance: updateBalance
+        }
+      })
+    } else {
+      const newBalance = new BalanceModel({ walletId: walletId, tokenId: tokenId, balance: balance });
+      await newBalance.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      msg: "Successfully updated"
+    })
+  } catch (err) {
+    console.log("Insert Wallet Balance Error =>", err);
+    return res.status(404).json({ err })
   }
 }

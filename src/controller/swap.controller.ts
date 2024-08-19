@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import RunexTxModel from "../model/transaction.model";
 import { calcEstimateAmount } from "../utils/pool";
 import walletModel from "../model/wallet.model";
-import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT, sendBtc, sendRune } from "../utils/transfer";
+// import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT } from "../utils/psbt";
+import { generateSendBtcToUser, generateSendBtcFromUser, generateSendRuneFromUser, generateSendRuneToUser, sendBtc, sendRune } from "../utils/psbt";
 import { MEMPOOLAPI_URL } from "../config/config";
 import axios from "axios";
 import { getCurrentBlockheight } from "../utils/mempool";
@@ -193,26 +194,29 @@ export const handleDirectSwap = async (
 export const getSendRunePsbt = async (req: Request, res: Response) => {
   const {
     senderPaymentAddress,
-    senderPaymnetPubKey,
+    senderPaymentPubkey,
     senderOrdinalAddress,
     senderOrdinalPubkey,
     amount,
     receiverOrdinalAddress,
-    runeId
+    runeId,
+    walletType
   } = req.body;
   try {
     console.log("Rune Id =>", req.body);
-    const psbt = await generateSendRunePSBT(
+    const psbt = await generateSendRuneFromUser(
       senderPaymentAddress,
-      senderPaymnetPubKey,
+      senderPaymentPubkey,
       senderOrdinalAddress,
       senderOrdinalPubkey,
       amount,
       receiverOrdinalAddress,
-      runeId);
+      runeId,
+      walletType
+    );
     return res.status(200).json({
       success: true,
-      psbt: psbt.toHex()
+      psbt: psbt
     })
   } catch (error) {
     console.log("Get send Rune Psbt =>", error);
@@ -222,57 +226,6 @@ export const getSendRunePsbt = async (req: Request, res: Response) => {
     })
   }
 }
-
-export const getSplitRunePsbt = async (req: Request, res: Response) => {
-  const {
-    senderAddress,
-    senderPubkey,
-    amount,
-    runeId
-  } = req.body;
-  try {
-    console.log("Rune Id =>", req.body);
-    const psbt = await generateSplitRunePSBT(senderAddress, senderPubkey, amount, runeId);
-    return res.status(200).json({
-      success: true,
-      psbt: psbt.psbt.toHex()
-    })
-  } catch (error) {
-    console.log("Get send Rune Psbt =>", error);
-    return res.status(404).json({
-      success: false,
-      error: error
-    })
-  }
-}
-
-export const getSendSplitedRunePsbt = async (req: Request, res: Response) => {
-  const {
-    psbt,
-    signedPsbt,
-    senderAddress,
-    senderPubkey,
-    amount,
-    receiverAddress,
-  } = req.body;
-
-  try {
-    const txId = await combinePsbt(psbt, signedPsbt);
-    console.log("txId =>", txId.payload);
-    const sendRunePsbt = await generateSendSplitedRunePSBT(senderAddress, senderPubkey, amount, txId.payload, receiverAddress);
-    return res.status(200).json({
-      success: true,
-      psbt: sendRunePsbt.psbt.toHex()
-    })
-  } catch (error) {
-    console.log("Generate send split rune psbt =>", error);
-    return res.status(404).json({
-      success: false,
-      error: error
-    })
-  }
-}
-
 
 export const broadcastPsbt = async (req: Request, res: Response) => {
   const {
@@ -302,13 +255,14 @@ export const getSendBTCPsbt = async (req: Request, res: Response) => {
       senderAddress,
       senderPubkey,
       receiverAddress,
-      amount
+      amount,
+      walletType
     } = req.body;
-    const psbt = await generateSendBTCPSBT(senderAddress, senderPubkey, receiverAddress, amount);
+    const psbt = await generateSendBtcFromUser(senderAddress, senderPubkey, receiverAddress, amount, walletType);
 
     return res.status(200).json({
       success: true,
-      psbt: psbt.toHex()
+      psbt: psbt
     })
   } catch (error) {
     console.log("Generate send btc error =>", error);
@@ -316,5 +270,70 @@ export const getSendBTCPsbt = async (req: Request, res: Response) => {
       success: false,
       error
     })
+  }
+}
+
+export const sendBtcToUser = async (receiverAddress: string, amount: number, walletType: string) => {
+  try {
+    const txId = await sendBtc(receiverAddress, amount, walletType);
+
+  } catch (err) {
+
+  }
+}
+export const sendRuneToUser = async (amount: number, receiverAddress: string, runeId: string, walletType: string) => {
+  try {
+    const txId = await sendRune(receiverAddress, amount, runeId, walletType);
+    
+  } catch (err) {
+    
+
+  }
+}
+
+export const sendBtcToUserTest = async (req: Request, res: Response) => {
+  const {
+    receiverAddress,
+    amount,
+    walletType
+  } = req.body;
+  try {
+    const txId = await sendBtc(receiverAddress, amount, walletType);
+  
+    return res.status(200).json({
+      success: true,
+      txId
+    });
+    
+  } catch (err) {
+    return res.status(404).json({
+      success: false,
+      err
+    });
+
+  }
+}
+
+export const sendRuneToUserTest = async (req: Request, res: Response) => {
+  const {
+    amount,
+    receiverAddress,
+    runeId,
+    walletType,
+  } = req.body;
+  try {
+    const txId = await sendRune(receiverAddress, amount, runeId, walletType);
+  
+    return res.status(200).json({
+      success: true,
+      txId
+    });
+    
+  } catch (err) {
+    return res.status(404).json({
+      success: false,
+      err
+    });
+
   }
 }

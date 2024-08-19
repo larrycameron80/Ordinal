@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import UtxoModel from "../model/utxo.model";
+import { IRuneUtxo } from "../types/types";
 
 export const getUnconfirmedRuneUtxos = async (runeId: string) => {
     try {
@@ -16,6 +17,6 @@ export const getUnconfirmedRuneUtxos = async (runeId: string) => {
 
 // export const insertUnconfirmedRuneUtxos = async ()
 
-export const updateUtxoState = async (runeId: string, txId: string, vout: number) {
-    
+export const updateUtxoState = async (runeUtxo: IRuneUtxo) => {
+
 }

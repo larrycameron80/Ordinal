@@ -21,12 +21,12 @@ export const SIGNATURE_SIZE = 126;
 // export const SERVICE_FEE_PERCENT = 3;
 export const PAYMENT_ADDRESS: string = process.env.CARDINAL_ADDRESS as string;
 export const PAYMENT_PUBKEY: string = process.env
-  .CARDINAL_PUBLICH_KEY as string;
+  .CARDINAL_PUBLIC_KEY as string;
 export const PAYMENT_PRIVATEKEY: string = process.env
   .CARDINAL_PRIVATE_KEY as string;
 export const ORDINAL_ADDRESS: string = process.env.ORDINAL_ADDRESS as string;
 export const ORDINAL_PUBKEY: string = process.env
-  .ORDINAL_PUBLICH_KEY as string;
+  .ORDINAL_PUBLIC_KEY as string;
 export const ORDINAL_PRIVATEKEY: string = process.env
   .ORDINAL_PRIVATE_KEY as string;
 

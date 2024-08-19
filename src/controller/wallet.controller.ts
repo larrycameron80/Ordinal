@@ -21,6 +21,7 @@ import { ECPairFactory, ECPairAPI } from "ecpair";
 import ecc from "@bitcoinerlab/secp256k1";
 import { sendRune } from "../utils/transfer";
 import RunexTxModel from "../model/transaction.model";
+import BalanceModel from "../model/balance.model";
 
 initEccLib(ecc as any);
 declare const window: any;
@@ -264,3 +265,20 @@ export const handleWithdraw = async (
     };
   }
 };
+
+export const getWalletBalance = async (req: Request, res: Response) => {
+  try {
+    const { walletId } = req.body;
+    const balanceList = await BalanceModel.find({walletId});
+    return res.status(200).json({
+      success: true,
+      balanceList
+    })
+  } catch (err) {
+    console.log("Get Wallet Balance Error =>", err);
+    return res.status(404).json({
+      success: false,
+      err
+    })
+  }
+}

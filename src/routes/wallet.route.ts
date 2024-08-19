@@ -8,6 +8,7 @@ import {
   getUserInventory,
   updateBalance,
   withdraw,
+  getWalletBalance,
 } from "../controller/wallet.controller";
 
 const router: Router = express.Router();
@@ -116,5 +117,13 @@ router.post("/withdraw", async (req: Request, res: Response) => {
     console.log("Get User Inventory => ", error);
   }
 });
+
+router.post("/getWalletBalance", async (req: Request, res: Response) => {
+  try {
+    await getWalletBalance(req, res);
+  } catch (error) {
+    console.log("Get Wallet Balance =>", error);
+  }
+})
 
 export default router;

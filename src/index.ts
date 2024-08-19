@@ -8,6 +8,7 @@ import swapRouter from "./routes/swap.route";
 import transactionRouter from "./routes/transaction.route";
 import walletRouter from "./routes/wallet.route";
 import runeRouter from "./routes/rune.route";
+import testRouter from "./routes/test.route";
 import { mempoolSocketInit } from "./utils/mempool";
 
 dotenv.config();
@@ -47,3 +48,4 @@ app.use("/api/pool/", poolRouter);
 app.use("/api/transaction/", transactionRouter);
 app.use("/api/swap/", swapRouter);
 app.use("/api/rune/", runeRouter);
+app.use("/api/test/", testRouter);

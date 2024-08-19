@@ -81,7 +81,6 @@ export const getBtcUtxoByAddress = async (address: string) => {
     })
   );
 
-  console.log(utxos)
   return utxos;
 };
 

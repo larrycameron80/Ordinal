@@ -19,7 +19,7 @@ import {
 } from "bitcoinjs-lib";
 import { ECPairFactory, ECPairAPI } from "ecpair";
 import ecc from "@bitcoinerlab/secp256k1";
-import { sendRune, sendBtc } from "../utils/transfer";
+import { sendRune } from "../utils/transfer";
 import RunexTxModel from "../model/transaction.model";
 
 initEccLib(ecc as any);
@@ -197,7 +197,8 @@ export const withdraw = async (req: Request, res: Response) => {
         error: errMsg,
       });
     }
-    const btcTxId = await sendBtc(paymentAddress, btcBalance);
+    const btcTxId = "";
+    // const btcTxId = await sendBtc(paymentAddress, btcBalance);
     const blockHeight = await axios.get(`${MEMPOOLAPI_URL}/blocks/tip/height`);
     const newBtcTx = new RunexTxModel({
       txType: TxType.WITHDRAW,

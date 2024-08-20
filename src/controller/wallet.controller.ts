@@ -9,6 +9,7 @@ import {
   MEMPOOLAPI_URL,
   TEST_MODE,
   TxType,
+  TxStatus,
 } from "../config/config";
 const RUNEX_RUNE_ID = "";
 import {
@@ -19,8 +20,10 @@ import {
 } from "bitcoinjs-lib";
 import { ECPairFactory, ECPairAPI } from "ecpair";
 import ecc from "@bitcoinerlab/secp256k1";
-import { sendRune } from "../utils/transfer";
+import { sendBtc, sendRune } from "../utils/psbt";
 import RunexTxModel from "../model/transaction.model";
+import BalanceModel from "../model/balance.model";
+import { getCurrentBlockheight } from "../utils/mempool";
 
 initEccLib(ecc as any);
 declare const window: any;
@@ -179,60 +182,47 @@ export const updateBalance = async (
 };
 
 export const withdraw = async (req: Request, res: Response) => {
-  const { paymentAddress, ordinalAddress, btcBalance, runeBalance } = req.body;
+  const { walletId, tokenId, balance } = req.body;
   try {
-    const userWallet = await WalletModel.findOne({
-      paymentAddress,
-      ordinalAddress,
-    });
+    const wallet = await WalletModel.findById(walletId);
+    const walletBalance = await BalanceModel.findOne({ walletId: walletId, tokenId: tokenId });
 
-    // const btcVal = userWallet?.btcValue;
-    // const runeVal = userWallet?.runeValue;
-    const btcVal = 0;
-    const runeVal = 0;
-    if (Number(btcVal) < btcBalance || Number(runeVal) < runeBalance) {
-      const errMsg = "Your wallet has not enough balance";
+    if (wallet && walletBalance && walletBalance.balance > balance) {
+
+      let txId = "";
+      if (tokenId == "btc") {
+        txId = await sendBtc(wallet.paymentAddress, balance, wallet.walletType);
+      } else {
+        txId = await sendRune(wallet.ordinalAddress, balance, tokenId, wallet.walletType)
+      }
+      const blockHeight = await getCurrentBlockheight();
+      const newTx = new RunexTxModel({
+        txType: TxType.WITHDRAW,
+        txId,
+        cardinalAddress: wallet.paymentAddress,
+        cardinalAddressPubkey: wallet.paymentPublicKey,
+        ordinalAddress: wallet.ordinalAddress,
+        ordinalAddressPubkey: wallet.ordinalPublicKey,
+        token1Id: tokenId,
+        token1Amount: balance,
+        token2Id: "",
+        token2Amount: 0,
+        status: TxStatus.UNCONFIRMED,
+        blockHeight: blockHeight
+      });
+
+      newTx.save();
+
+      return res.status(200).json({
+        success: true,
+        txId
+      })
+    } else {
       return res.status(404).json({
         success: false,
-        error: errMsg,
-      });
+        msg: "You don't have enough balance!"
+      })
     }
-    const btcTxId = "";
-    // const btcTxId = await sendBtc(paymentAddress, btcBalance);
-    const blockHeight = await axios.get(`${MEMPOOLAPI_URL}/blocks/tip/height`);
-    const newBtcTx = new RunexTxModel({
-      txType: TxType.WITHDRAW,
-      txId: btcTxId,
-      cardinalAddress: paymentAddress,
-      cardinalAddressPubkey: "",
-      ordinalAddress: ordinalAddress,
-      ordinalAddressPubkey: "",
-      btcAmount: btcBalance,
-      runeAmount: 0,
-      status: "unconfirmed",
-      blockHeight: blockHeight,
-    });
-    await newBtcTx.save();
-
-    const runeTxId = await sendRune(ordinalAddress, runeBalance, RUNEX_RUNE_ID);
-    const newRuneTx = new RunexTxModel({
-      txType: TxType.WITHDRAW,
-      txId: runeTxId,
-      cardinalAddress: paymentAddress,
-      cardinalAddressPubkey: "",
-      ordinalAddress: ordinalAddress,
-      ordinalAddressPubkey: "",
-      btcAmount: 0,
-      runeAmount: runeBalance,
-      status: "unconfirmed",
-      blockHeight: blockHeight,
-    });
-    await newRuneTx.save();
-
-    return res.status(200).json({
-      success: true,
-      msg: "Successfully requested, please wait until transaction is confirmed.",
-    });
   } catch (error) {
     return res.status(404).json({
       success: false,
@@ -264,3 +254,61 @@ export const handleWithdraw = async (
     };
   }
 };
+
+export const getWalletBalance = async (req: Request, res: Response) => {
+  try {
+    const { walletId } = req.body;
+    const balanceList = await BalanceModel.find({ walletId });
+    return res.status(200).json({
+      success: true,
+      balanceList
+    })
+  } catch (err) {
+    console.log("Get Wallet Balance Error =>", err);
+    return res.status(404).json({
+      success: false,
+      err
+    })
+  }
+}
+
+export const updateWalletBalance = async (req: Request, res: Response) => {
+  try {
+    const {
+      walletId,
+      tokenId,
+      balance,
+      direct
+    } = req.body;
+
+    const balanceExist = await BalanceModel.findOne({ walletId: walletId, tokenId: tokenId });
+    if (balanceExist) {
+      if (direct == "withdraw" && balanceExist.balance < balance) {
+        return res.status(200).json({
+          success: false,
+          msg: "Your balance is not too enough!"
+        })
+      }
+      const updateBalance = direct == "deposit" ? balance : -1 * balance;
+      await BalanceModel.findOneAndUpdate({
+        walletId: walletId,
+        tokenId: tokenId
+      }, {
+        $inc: {
+          balance: updateBalance
+        }
+      })
+    } else {
+      const newBalance = new BalanceModel({ walletId: walletId, tokenId: tokenId, balance: balance });
+      await newBalance.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      msg: "Successfully updated"
+    })
+  } catch (err) {
+    console.log("Insert Wallet Balance Error =>", err);
+    return res.status(404).json({ err })
+  }
+}

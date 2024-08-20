@@ -86,44 +86,24 @@ router.post(
   "/getBTCBalance",
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      await getBTCBalance(req, res);
-    } catch (error) {
-      next(error);
-    }
+    await getBTCBalance(req, res);
   }
 );
 
 router.post("/getRuneBalance", async (req: Request, res: Response) => {
-  try {
-    await getRuneBalance(req, res);
-  } catch (error) {
-    console.log("error ==> ", error);
-  }
+  await getRuneBalance(req, res);
 });
 
 router.post("/getUserInventory", async (req: Request, res: Response) => {
-  try {
-    await getUserInventory(req, res);
-  } catch (error) {
-    console.log("Get User Inventory => ", error);
-  }
+  await getUserInventory(req, res);
 });
 
 router.post("/withdraw", async (req: Request, res: Response) => {
-  try {
-    await withdraw(req, res);
-  } catch (error) {
-    console.log("Withdraw error => ", error);
-  }
+  await withdraw(req, res);
 });
 
 router.post("/getWalletBalance", async (req: Request, res: Response) => {
-  try {
-    await getWalletBalance(req, res);
-  } catch (error) {
-    console.log("Get Wallet Balance =>", error);
-  }
+  await getWalletBalance(req, res);
 })
 
 export default router;

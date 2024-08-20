@@ -4,7 +4,7 @@ const PoolBalanceModel = new Schema(
     {
         walletId: { type: String, required: true },
         poolId: { type: String, required: true },
-        lpBalance: { type: String, required: true }
+        lpBalance: { type: Number, required: true }
     },
 );
 

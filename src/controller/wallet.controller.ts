@@ -97,43 +97,51 @@ export const walletConnect = async (req: Request, res: Response) => {
 };
 
 export const getBTCBalance = async (req: Request, res: Response) => {
-  const { paymentAddress } = req.body;
+  try {
+    const { paymentAddress } = req.body;
 
-  const url = `${OPENAPI_UNISAT_URL}/v1/indexer/address/${paymentAddress}/balance`;
-  const config = {
-    headers: {
-      Authorization: `Bearer ${OPENAPI_UNISAT_TOKEN}`,
-    },
-  };
-  const response = await axios.get(url, config);
-  console.log("response.data.data ==> ", response.data.data);
-  const { satoshi, btcSatoshi } = response.data.data;
+    const url = `${OPENAPI_UNISAT_URL}/v1/indexer/address/${paymentAddress}/balance`;
+    const config = {
+      headers: {
+        Authorization: `Bearer ${OPENAPI_UNISAT_TOKEN}`,
+      },
+    };
+    const response = await axios.get(url, config);
+    console.log("response.data.data ==> ", response.data.data);
+    const { satoshi, btcSatoshi } = response.data.data;
 
-  return res.status(200).json({
-    success: true,
-    payload: {
-      satoshi,
-      btcSatoshi,
-    },
-  });
+    return res.status(200).json({
+      success: true,
+      payload: {
+        satoshi,
+        btcSatoshi,
+      },
+    });
+  } catch (error) {
+    console.log("Get BTC Balance Error =>", error);
+  }
 };
 
 export const getRuneBalance = async (req: Request, res: Response) => {
-  const { ordinalAddress, runeId } = req.body;
-  const config = {
-    headers: {
-      Authorization: `Bearer ${OPENAPI_UNISAT_TOKEN}`,
-    },
-  };
+  try {
+    const { ordinalAddress, runeId } = req.body;
+    const config = {
+      headers: {
+        Authorization: `Bearer ${OPENAPI_UNISAT_TOKEN}`,
+      },
+    };
 
-  const url = `${OPENAPI_UNISAT_URL}/v1/indexer/address/${ordinalAddress}/runes/${runeId}/balance`;
-  const response = await axios.get(url, config);
-  console.log("response ==> ", response.data.data);
-  return res.status(201).json({
-    success: true,
-    payload: response.data.data,
-    message: "Fetching successfully!",
-  });
+    const url = `${OPENAPI_UNISAT_URL}/v1/indexer/address/${ordinalAddress}/runes/${runeId}/balance`;
+    const response = await axios.get(url, config);
+    console.log("response ==> ", response.data.data);
+    return res.status(201).json({
+      success: true,
+      payload: response.data.data,
+      message: "Fetching successfully!",
+    });
+  } catch (error) {
+    console.log("Get Rune Balance Error =>", error);
+  }
 };
 
 export const getUserInventory = async (req: Request, res: Response) => {
@@ -200,9 +208,9 @@ export const withdraw = async (req: Request, res: Response) => {
         txType: TxType.WITHDRAW,
         txId,
         cardinalAddress: wallet.paymentAddress,
-        cardinalAddressPubkey: wallet.paymentPublicKey,
+        cardinalPubkey: wallet.paymentPublicKey,
         ordinalAddress: wallet.ordinalAddress,
-        ordinalAddressPubkey: wallet.ordinalPublicKey,
+        ordinalPubkey: wallet.ordinalPublicKey,
         token1Id: tokenId,
         token1Amount: balance,
         token2Id: "",

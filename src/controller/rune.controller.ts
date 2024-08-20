@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import RuneModel from "../model/rune.model";
 
 export const getRuneList = async (req?: Request, res?: Response) => {
-
     try {
         const runeList = await RuneModel.find();
         console.log("runeList =>", runeList);

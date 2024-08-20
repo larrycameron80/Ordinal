@@ -46,7 +46,6 @@ export enum AddressType {
 
 export enum TxType {
   SWAP = "swap",
-  SWAP_PROCESS = "swap-process",
   INSTANT_SWAP = "instant-swap",
   DEPOSIT = "deposit",
   WITHDRAW = "withdraw",

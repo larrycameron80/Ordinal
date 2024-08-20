@@ -139,7 +139,6 @@ export const generateSendBtcFromUser = async (
   const psbt = new Bitcoin.Psbt({ network: network });
 
   await delay(15000);
-  amount *= 10 ** 8;
   const btcUtxos = await getBtcUtxoByAddress(senderAddress as string);
 
   let fee = await calcFeeSendBtcFromUser(amount, btcUtxos, walletType);
@@ -262,7 +261,6 @@ export const generateSendBtcToUser = async (
   delay(1500);
   const senderAddress = PAYMENT_ADDRESS;
   const senderPubkey = PAYMENT_PUBKEY;
-  amount *= 10 ** 8;
   const psbt = new Bitcoin.Psbt({ network: network });
   const btcUtxos = await getBtcUtxoByAddress(senderAddress);
 
@@ -323,7 +321,7 @@ export const calcFeeSendRuneFromUser = async (
   const senderOrdinalPubkey = ORDINAL_PUBKEY;
   const receiverOrdinalAddress = ORDINAL_ADDRESS;
 
-  const runeAmount = amount * 10 ** runeUtxos.divisibility;
+  const runeAmount = amount;
   if (runeUtxos.tokenSum < amount) {
     throw "Invalid Amount";
   }
@@ -471,7 +469,7 @@ export const generateSendRuneFromUser = async (
   const paymentSignIndexs: number[] = [];
   const ordinalSignIndexs: number[] = [];
 
-  const runeAmount = amount * 10 ** runeUtxos.divisibility;
+  const runeAmount = amount;
 
   if (runeUtxos.tokenSum < runeAmount) {
     throw "Invalid Amount";
@@ -501,7 +499,7 @@ export const generateSendRuneFromUser = async (
           script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
         },
       });
-      tokenSum += runeutxo.amount * 10 ** runeutxo.divisibility;
+      tokenSum += runeutxo.amount;
     }
   }
 
@@ -589,7 +587,7 @@ export const calcFeeSendRuneToUser = async (
   const senderOrdinalAddress = ORDINAL_ADDRESS;
   const senderOrdinalPubkey = ORDINAL_PUBKEY;
   const receiverOrdinalAddress = ORDINAL_ADDRESS;
-  const runeAmount = amount * 10 ** runeUtxos[0].divisibility;
+  const runeAmount = amount;
 
   const runeBlockNumber = parseInt(runeId.split(":")[0]);
   const runeTxout = parseInt(runeId.split(":")[1]);
@@ -668,7 +666,7 @@ export const calcFeeSendRuneToUser = async (
       value: 546,
     });
 
-  psbt.addOutput({
+    psbt.addOutput({
       address: senderOrdinalAddress,
       value: 546,
     });
@@ -746,7 +744,7 @@ export const generateSendRuneToUser = async (
     runeId
   );
 
-  const runeAmount = amount * 10 ** divisibility;
+  const runeAmount = amount;
   if (unconfirmedRuneUtxos.length != 0) {
     runeUtxos = runeUtxos.filter((utxo: any) => {
       let temp = unconfirmedRuneUtxos.filter((x: any) => {

@@ -1,5 +1,5 @@
 import express, { Request, Response, Router } from "express";
-import { addLiquidity, removeLiquidity } from "../controller/pool.controller";
+import { addLiquidity, createPool, getEstimateLpAmount, getPoolList, removeLiquidity } from "../controller/pool.controller";
 
 const router: Router = express.Router();
 
@@ -18,5 +18,17 @@ const router: Router = express.Router();
 //     console.log("Remove liquidity error =>", error);
 //   }
 // });
+
+router.get("/list", async (req: Request, res: Response) => {
+    await getPoolList(req, res);
+});
+
+router.post("/create", async (req: Request, res: Response) => {
+    await createPool(req, res);
+});
+
+router.post("/estimateLp", async (req: Request, res: Response) => {
+    await getEstimateLpAmount(req, res);
+})
 
 export default router;

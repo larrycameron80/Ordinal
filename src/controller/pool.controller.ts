@@ -4,6 +4,9 @@ import PoolModel from "../model/pool.model";
 import PoolBalance from "../model/poolbalance.model";
 import BalanceModel from "../model/balance.model";
 import WalletModel from "../model/wallet.model";
+import TxModel from "../model/transaction.model";
+import { TxStatus, TxType } from "../config/config";
+import { getEstimatePool } from "../utils/pool";
 
 const getWalletId = async (paymentAddress: string, ordinalAddress: string) => {
     try {
@@ -198,7 +201,6 @@ export const removeLiquidity = async (
     }
 }
 
-
 export const getBalance = async (token1Id: string, token2Id: string) => {
     try {
         const res = await PoolModel.findOne({ token1Id: token1Id, token2Id: token2Id });
@@ -222,3 +224,62 @@ export const getBalance = async (token1Id: string, token2Id: string) => {
         }
     }
 }
+
+export const getPoolList = async (req: Request, res: Response) => {
+    try {
+        const poolList = await PoolModel.find();
+        console.log("Pool List =>", poolList);
+        return res.status(200).json({
+            success: true,
+            poolList
+        })
+    } catch (error) {
+        console.log("Get Pool List error =>", error);
+        return res.status(404).json({
+            success: false,
+            error
+        })
+    }
+}
+
+export const createPool = async (req: Request, res: Response) => {
+    try {
+        const newPool = new PoolModel(req.body);
+        const pool = await newPool.save();
+        return res.status(200).json({
+            success: true,
+            pool
+        })
+    } catch (error) {
+        console.log("Create Pool Error =>", error);
+        return res.status(404).json({
+            success: false,
+            error
+        })
+    }
+}
+
+export const getEstimateLpAmount = async (req: Request, res: Response) => {
+    try {
+        const { amount1, amount2, poolId } = req.body;
+        const estimatePool = await getEstimatePool(poolId);
+        if (estimatePool.success) {
+            const token1Balance = estimatePool.token1Balance || 100000;
+            const token2Balance = estimatePool.token2Balance || 100000;
+            const totalLpBalance = estimatePool.totalLpBalance || 100000;
+            const lp = Math.floor(Math.min(((amount1 / token1Balance) / totalLpBalance), ((amount2 / token2Balance) / totalLpBalance)));
+            return res.status(200).json({
+                success: true,
+                lp
+            })
+        } else {
+            return res.status(200).json({
+                success: false,
+                lp: 0
+            })
+        }
+    } catch (error) {
+        console.log("Get Estimate Lp Amount Error =>", error);
+    }
+}
+

@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import RunexTxModel from "../model/transaction.model";
-import { calcEstimateAmount } from "../utils/pool";
+import { calcEstimateAmount, getEstimatePool } from "../utils/pool";
 import walletModel from "../model/wallet.model";
 // import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT } from "../utils/psbt";
 import { generateSendBtcToUser, generateSendBtcFromUser, generateSendRuneFromUser, generateSendRuneToUser, sendBtc, sendRune } from "../utils/psbt";
@@ -190,7 +190,6 @@ export const handleDirectSwap = async (
   }
 };
 
-
 export const getSendRunePsbt = async (req: Request, res: Response) => {
   const {
     senderPaymentAddress,
@@ -276,17 +275,15 @@ export const getSendBTCPsbt = async (req: Request, res: Response) => {
 export const sendBtcToUser = async (receiverAddress: string, amount: number, walletType: string) => {
   try {
     const txId = await sendBtc(receiverAddress, amount, walletType);
-
   } catch (err) {
-
   }
 }
 export const sendRuneToUser = async (amount: number, receiverAddress: string, runeId: string, walletType: string) => {
   try {
     const txId = await sendRune(receiverAddress, amount, runeId, walletType);
-    
+
   } catch (err) {
-    
+
 
   }
 }
@@ -299,12 +296,11 @@ export const sendBtcToUserTest = async (req: Request, res: Response) => {
   } = req.body;
   try {
     const txId = await sendBtc(receiverAddress, amount, walletType);
-  
     return res.status(200).json({
       success: true,
       txId
     });
-    
+
   } catch (err) {
     return res.status(404).json({
       success: false,
@@ -323,17 +319,51 @@ export const sendRuneToUserTest = async (req: Request, res: Response) => {
   } = req.body;
   try {
     const txId = await sendRune(receiverAddress, amount, runeId, walletType);
-  
+
     return res.status(200).json({
       success: true,
       txId
     });
-    
+
   } catch (err) {
     return res.status(404).json({
       success: false,
       err
     });
 
+  }
+}
+
+export const getEstimateAmount = async (req: Request, res: Response) => {
+  try {
+    const { tokenId, amount, poolId } = req.body;
+    const estimatePool = await getEstimatePool(poolId);
+    if (estimatePool.success) {
+      const token1Balance = estimatePool.token1Balance || 10000000;
+      const token2Balance = estimatePool.token2Balance || 10000000;
+      const token1Id = estimatePool.token1Id || "btc";
+      const token2Id = estimatePool.token2Id || "btc";
+      let estimateAmount = 0;
+      if (tokenId == token1Id) {
+        const temp = Math.floor((token1Balance * token2Balance) / (token1Balance + amount));
+        estimateAmount = token2Balance - temp;
+      } else if (tokenId != token2Id) {
+        const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount));
+        estimateAmount = token2Balance - temp;
+      }
+
+      return res.status(200).json({
+        success: true,
+        estimateAmount
+      })
+    } else {
+      return res.status(200).json({
+        success: false,
+        estimateAmount: 0
+      })
+    }
+
+  } catch (error) {
+    console.log("Get Estimate Amount Error =>", error);
   }
 }

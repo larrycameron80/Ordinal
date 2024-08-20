@@ -24,9 +24,9 @@ export const swap = async (req: Request, res: Response) => {
       txType: "wallet-swap-" + direction,
       txId: "",
       cardinalAddress: paymentAddress,
-      cardinalAddressPubkey: "",
+      cardinalPubkey: "",
       ordinalAddress: ordinalAddress,
-      ordinalAddressPubkey: "",
+      ordinalPubkey: "",
       btcAmount: direction == "rune" ? baseAmount : estimateAmount,
       runeAmount: direction == "btc" ? baseAmount : estimateAmount,
       status: "unconfirmed",
@@ -132,9 +132,9 @@ export const directSwap = async (
       txType: "swap-" + direction + "-process",
       txId,
       cardinalAddress: paymentAddress,
-      cardinalAddressPubkey: "",
+      cardinalPubkey: "",
       ordinalAddress: ordinalAddress,
-      ordinalAddressPubkey: "",
+      ordinalPubkey: "",
       btcAmount: direction == "rune" ? 0 : estimateAmount,
       runeAmount: direction == "rune" ? estimateAmount : 0,
       status: "unconfirmed",
@@ -349,7 +349,7 @@ export const getEstimateAmount = async (req: Request, res: Response) => {
         estimateAmount = token2Balance - temp;
       } else if (tokenId != token2Id) {
         const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount));
-        estimateAmount = token2Balance - temp;
+        estimateAmount = token1Balance - temp;
       }
 
       return res.status(200).json({

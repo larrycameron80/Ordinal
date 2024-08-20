@@ -114,7 +114,7 @@ router.post("/withdraw", async (req: Request, res: Response) => {
   try {
     await withdraw(req, res);
   } catch (error) {
-    console.log("Get User Inventory => ", error);
+    console.log("Withdraw error => ", error);
   }
 });
 

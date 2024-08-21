@@ -391,6 +391,7 @@ export const calcFeeSendRuneFromUser = async (
     let totalBtcAmount = 0;
 
     const feeRate = await getFeeRate();
+    console.log("Calc fee", feeRate, runeAmount, tokenSum, edicts);
 
     totalBtcAmount = 0;
     for (const btcutxo of btcUtxos) {
@@ -425,7 +426,7 @@ export const calcFeeSendRuneFromUser = async (
 
     const tx = psbt.extractTransaction();
 
-    const estimateFee = tx.virtualSize() * feeRate * 2;
+    const estimateFee = tx.virtualSize() * (feeRate + 30);
 
     console.log("Calc exact estimateFee =>", estimateFee);
 
@@ -545,7 +546,7 @@ export const generateSendRuneFromUser = async (
   console.log("senderPayment pubkey =>", senderPaymnetPubKey);
 
   for (const btcutxo of btcUtxos) {
-    if (totalBtcAmount < fee && btcutxo.value > 1000) {
+    if (totalBtcAmount < fee && btcutxo.value > 10000) {
       totalBtcAmount += btcutxo.value;
       paymentSignIndexs.push(psbt.inputCount);
       psbt.addInput({

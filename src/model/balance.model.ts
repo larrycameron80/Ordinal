@@ -4,7 +4,7 @@ const BalanceModel = new Schema(
     {
         walletId: { type: String, required: true },
         tokenId: { type: String, required: true },
-        balance: { type: String, required: true }
+        balance: { type: Number, required: true }
     },
 );
 

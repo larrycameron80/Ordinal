@@ -104,21 +104,15 @@ export const remove = async (txId: string) => {
   }
 };
 
-export const get10Txs = async () => {
+export const getTxs = async () => {
   try {
     const res = await RunexTXModel.find({
       status: { $ne: TxStatus.PROCESSED },
-    }).limit(10);
-    return {
-      success: true,
-      txList: res,
-    };
+    });
+    return res;
   } catch (error) {
     console.log("Get 10 transactions error =>", error);
-    return {
-      success: false,
-      error: error,
-    };
+    return [];
   }
 };
 

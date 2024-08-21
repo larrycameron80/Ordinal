@@ -352,11 +352,10 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token2Id,
       token2Amount,
     } = req.body;
-    const blockHeight = await getCurrentBlockheight();
 
     const newTx = new RunexTxModel({
       txType: TxType.LIQUIDITY_ADD,
-      txId: "",
+      txId: "Add Liquidity",
       cardinalAddress,
       cardinalPubkey,
       ordinalAddress,
@@ -365,8 +364,8 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token1Amount,
       token2Id,
       token2Amount,
-      status: TxStatus.PROCESSED,
-      blockHeight: blockHeight,
+      status: TxStatus.CONFIRMED,
+      blockHeight: 0,
     })
 
     await newTx.save();
@@ -392,11 +391,9 @@ export const removeLiquidityRequest = async (req: Request, res: Response) => {
           token2Id,
         } = req.body;
 
-        const blockHeight = await getCurrentBlockheight();
-    
         const newTx = new RunexTxModel({
           txType: TxType.LIQUIDITY_REMOVE,
-          txId: "",
+          txId: "Remove Liquidity",
           cardinalAddress,
           cardinalPubkey,
           ordinalAddress,
@@ -405,8 +402,8 @@ export const removeLiquidityRequest = async (req: Request, res: Response) => {
           token1Amount,
           token2Id,
           token2Amount: 0,
-          status: TxStatus.PROCESSED,
-          blockHeight: blockHeight,
+          status: TxStatus.CONFIRMED,
+          blockHeight: 0,
         })
     
         await newTx.save();

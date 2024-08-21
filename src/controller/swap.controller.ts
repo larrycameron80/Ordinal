@@ -4,7 +4,7 @@ import { calcEstimateAmount, getEstimatePool } from "../utils/pool";
 import walletModel from "../model/wallet.model";
 // import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT } from "../utils/psbt";
 import { generateSendBtcToUser, generateSendBtcFromUser, generateSendRuneFromUser, generateSendRuneToUser, sendBtc, sendRune } from "../utils/psbt";
-import { MEMPOOLAPI_URL } from "../config/config";
+import { MEMPOOLAPI_URL, TxStatus, TxType } from "../config/config";
 import axios from "axios";
 import { getCurrentBlockheight } from "../utils/mempool";
 import { updateTxStatus } from "./transaction.controller";
@@ -13,30 +13,36 @@ const RUNEX_RUNE_ID = "";
 
 export const swap = async (req: Request, res: Response) => {
   const {
-    paymentAddress,
+    cardinalAddress,
+    cardinalPubkey,
     ordinalAddress,
-    baseAmount,
-    estimateAmount,
-    direction,
+    ordinalPubkey,
+    token1Id,
+    token1Amount,
+    token2Id,
+    token2Amount,
   } = req.body;
   try {
     const newTx = new RunexTxModel({
-      txType: "wallet-swap-" + direction,
-      txId: "",
-      cardinalAddress: paymentAddress,
-      cardinalPubkey: "",
-      ordinalAddress: ordinalAddress,
-      ordinalPubkey: "",
-      btcAmount: direction == "rune" ? baseAmount : estimateAmount,
-      runeAmount: direction == "btc" ? baseAmount : estimateAmount,
-      status: "unconfirmed",
+      txType: TxType.INSTANT_SWAP,
+      txId: "swap",
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+      token2Amount,
+      status: TxStatus.CONFIRMED,
       blockHeight: 0,
     });
+
     await newTx.save();
 
     res.status(200).json({
       success: true,
-      msg: "Successfully requested!",
+      msg: "Successfully requested Swap!",
     });
   } catch (error) {
     console.log("Swap Transacrion Error =>", error);
@@ -330,14 +336,15 @@ export const sendRuneToUserTest = async (req: Request, res: Response) => {
       success: false,
       err
     });
-
   }
 }
 
 export const getEstimateAmount = async (req: Request, res: Response) => {
   try {
     const { tokenId, amount, poolId } = req.body;
+    console.log(tokenId, amount, poolId);
     const estimatePool = await getEstimatePool(poolId);
+    console.log(estimatePool);
     if (estimatePool.success) {
       const token1Balance = estimatePool.token1Balance || 10000000;
       const token2Balance = estimatePool.token2Balance || 10000000;
@@ -345,12 +352,14 @@ export const getEstimateAmount = async (req: Request, res: Response) => {
       const token2Id = estimatePool.token2Id || "btc";
       let estimateAmount = 0;
       if (tokenId == token1Id) {
-        const temp = Math.floor((token1Balance * token2Balance) / (token1Balance + amount));
+        const temp = Math.floor((token1Balance * token2Balance) / (token1Balance + amount * 1));
         estimateAmount = token2Balance - temp;
-      } else if (tokenId != token2Id) {
-        const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount));
+      } else if (tokenId == token2Id) {
+        const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount * 1));
         estimateAmount = token1Balance - temp;
       }
+      console.log(estimateAmount);
+
 
       return res.status(200).json({
         success: true,

@@ -219,7 +219,7 @@ export const withdraw = async (req: Request, res: Response) => {
         blockHeight: blockHeight
       });
 
-      newTx.save();
+      await newTx.save();
 
       return res.status(200).json({
         success: true,

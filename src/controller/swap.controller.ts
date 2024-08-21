@@ -330,14 +330,15 @@ export const sendRuneToUserTest = async (req: Request, res: Response) => {
       success: false,
       err
     });
-
   }
 }
 
 export const getEstimateAmount = async (req: Request, res: Response) => {
   try {
     const { tokenId, amount, poolId } = req.body;
+    console.log(tokenId, amount, poolId);
     const estimatePool = await getEstimatePool(poolId);
+    console.log(estimatePool);
     if (estimatePool.success) {
       const token1Balance = estimatePool.token1Balance || 10000000;
       const token2Balance = estimatePool.token2Balance || 10000000;
@@ -345,12 +346,14 @@ export const getEstimateAmount = async (req: Request, res: Response) => {
       const token2Id = estimatePool.token2Id || "btc";
       let estimateAmount = 0;
       if (tokenId == token1Id) {
-        const temp = Math.floor((token1Balance * token2Balance) / (token1Balance + amount));
+        const temp = Math.floor((token1Balance * token2Balance) / (token1Balance + amount * 1));
         estimateAmount = token2Balance - temp;
-      } else if (tokenId != token2Id) {
-        const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount));
+      } else if (tokenId == token2Id) {
+        const temp = Math.floor((token1Balance * token2Balance) / (token2Balance + amount * 1));
         estimateAmount = token1Balance - temp;
       }
+      console.log(estimateAmount);
+
 
       return res.status(200).json({
         success: true,

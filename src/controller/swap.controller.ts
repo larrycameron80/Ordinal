@@ -4,7 +4,7 @@ import { calcEstimateAmount, getEstimatePool } from "../utils/pool";
 import walletModel from "../model/wallet.model";
 // import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT } from "../utils/psbt";
 import { generateSendBtcToUser, generateSendBtcFromUser, generateSendRuneFromUser, generateSendRuneToUser, sendBtc, sendRune } from "../utils/psbt";
-import { MEMPOOLAPI_URL } from "../config/config";
+import { MEMPOOLAPI_URL, TxStatus, TxType } from "../config/config";
 import axios from "axios";
 import { getCurrentBlockheight } from "../utils/mempool";
 import { updateTxStatus } from "./transaction.controller";
@@ -13,30 +13,36 @@ const RUNEX_RUNE_ID = "";
 
 export const swap = async (req: Request, res: Response) => {
   const {
-    paymentAddress,
+    cardinalAddress,
+    cardinalPubkey,
     ordinalAddress,
-    baseAmount,
-    estimateAmount,
-    direction,
+    ordinalPubkey,
+    token1Id,
+    token1Amount,
+    token2Id,
+    token2Amount,
   } = req.body;
   try {
     const newTx = new RunexTxModel({
-      txType: "wallet-swap-" + direction,
-      txId: "",
-      cardinalAddress: paymentAddress,
-      cardinalPubkey: "",
-      ordinalAddress: ordinalAddress,
-      ordinalPubkey: "",
-      btcAmount: direction == "rune" ? baseAmount : estimateAmount,
-      runeAmount: direction == "btc" ? baseAmount : estimateAmount,
-      status: "unconfirmed",
+      txType: TxType.INSTANT_SWAP,
+      txId: "swap",
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+      token2Amount,
+      status: TxStatus.CONFIRMED,
       blockHeight: 0,
     });
+
     await newTx.save();
 
     res.status(200).json({
       success: true,
-      msg: "Successfully requested!",
+      msg: "Successfully requested Swap!",
     });
   } catch (error) {
     console.log("Swap Transacrion Error =>", error);

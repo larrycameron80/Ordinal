@@ -3,7 +3,7 @@ import { broadcastPsbt, getSendRunePsbt, swap, getSendBTCPsbt, getEstimateAmount
 
 const router: Router = express.Router();
 
-router.post("/swap", async (req: Request, res: Response) => {
+router.post("/swapRequest", async (req: Request, res: Response) => {
   await swap(req, res);
 });
 

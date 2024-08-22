@@ -27,12 +27,13 @@ export const handleTransaction = async () => {
 
       // Check the tx confirm status
       for (let runexTx of runexTxList) {
-        if (runexTx.status == TxStatus.UNCONFIRMED) {
-          for (const tx of txList) {
-            if (tx.id == runexTx.txId && tx.status.confirmed == true) {
-              runexTx.status = TxStatus.CONFIRMED;
-              await runexTx.save();
-            }
+        if (txFlag && runexTx.status == TxStatus.UNCONFIRMED) {
+          const status = await getTransactionStatus(runexTx.txId);
+          if (status.confirmed == true) {
+            runexTx.status = TxStatus.CONFIRMED;
+            await runexTx.save();
+          } else {
+            txFlag = false;
           }
         }
       }
@@ -59,6 +60,7 @@ export const handleTransaction = async () => {
             }
           }
         } else if (txType == TxType.DEPOSIT) {
+          console.log("step 0", runexTx, txFlag);
           if (runexTx.status == TxStatus.UNCONFIRMED) {
             txFlag = false;
           }
@@ -111,6 +113,7 @@ export const handleTransaction = async () => {
           }
         } else if (txType == TxType.LIQUIDITY_REMOVE) {
           const res = await removeLiquidity(runexTx.cardinalAddress, runexTx.ordinalAddress, runexTx.token1Id, runexTx.token2Id, runexTx.token1Amount);
+          console.log("Res =>", res);
           if (res) {
             runexTx.status = TxStatus.PROCESSED;
             await runexTx.save();

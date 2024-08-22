@@ -6,8 +6,9 @@ const UtxoModel = new Schema(
         txId: { type: String, required: true },
         value: { type: Number, required: true },
         vout: { type: Number, required: true },
-        scriptKey: {type: String, required: true},
+        scriptpubkey: {type: String, required: true},
         divisibility: { type: Number, required: true},
+        amount: {type: Number, required: true},
         status: { type: Boolean, required: true }
     },
 );

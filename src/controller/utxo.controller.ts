@@ -6,7 +6,7 @@ export const getUnconfirmedRuneUtxos = async (runeId: string) => {
     try {
         const res = await UtxoModel.find({
             runedId: runeId,
-            status: false,
+            status: true,
         })
 
         return res;
@@ -16,7 +16,3 @@ export const getUnconfirmedRuneUtxos = async (runeId: string) => {
 }
 
 // export const insertUnconfirmedRuneUtxos = async ()
-
-export const updateUtxoState = async (runeUtxo: IRuneUtxo) => {
-
-}

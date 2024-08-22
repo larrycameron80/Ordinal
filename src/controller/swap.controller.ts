@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import RunexTxModel from "../model/transaction.model";
 import { calcEstimateAmount, getEstimatePool } from "../utils/pool";
+import UtxoModel from "../model/utxo.model";
 import walletModel from "../model/wallet.model";
 // import { generateSendBTCPSBT, generateSendRunePSBT, generateSendSplitedRunePSBT, generateSplitRunePSBT } from "../utils/psbt";
 import {
@@ -19,7 +20,7 @@ import {
   WalletTypes,
 } from "../config/config";
 import axios from "axios";
-import { getCurrentBlockheight } from "../utils/mempool";
+import { getCurrentBlockheight, getSplitedRune } from "../utils/mempool";
 import { combinePsbt } from "../service/psbt.service";
 import PoolModel from "../model/pool.model";
 import BalanceModel from "../model/balance.model";
@@ -123,12 +124,27 @@ export const handleSwap = async (
         
         if (token1Id == "btc") {
           console.log("step 4");
-          await sendRuneToUser(
+          const res = await sendRuneToUser(
             ordinalAddress,
             receiveAmount,
             token2Id,
             WalletTypes.UNISAT
           );
+          if (res) {
+            const utxo = await getSplitedRune(res.txId);
+            const newUtxo = new UtxoModel({
+              runedId: token2Id,
+              txId: res.txId,
+              value: 546,
+              vout: 2,
+              scriptpubkey: utxo.scriptpubkey,
+              divisibility: res.tempUtxo.divisibility,
+              amount: res.tempUtxo.amount,
+              status: true
+            })
+            await newUtxo.save();
+            console.log("step 6 - 1", newUtxo);
+          }
         } else {
           console.log("step 5");
           await sendBtcToUser(
@@ -251,7 +267,10 @@ export const sendBtcToUser = async (
 ) => {
   try {
     const txId = await sendBtc(receiverAddress, amount, walletType);
-  } catch (err) {}
+    return txId;
+  } catch (error) {
+    console.log("Send Btc to User Error =>", error);
+  }
 };
 export const sendRuneToUser = async (
   receiverAddress: string,
@@ -260,8 +279,11 @@ export const sendRuneToUser = async (
   walletType: string
 ) => {
   try {
-    const txId = await sendRune(receiverAddress, amount, runeId, walletType);
-  } catch (err) {}
+    const res = await sendRune(receiverAddress, amount, runeId, walletType);
+    return res;
+  } catch (error) {
+    console.log("Send Rune To User Error =>", error);
+  }
 };
 
 export const sendBtcToUserTest = async (req: Request, res: Response) => {

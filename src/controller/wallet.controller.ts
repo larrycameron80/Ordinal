@@ -24,7 +24,8 @@ import ecc from "@bitcoinerlab/secp256k1";
 import { sendBtc, sendRune } from "../utils/psbt";
 import RunexTxModel from "../model/transaction.model";
 import BalanceModel from "../model/balance.model";
-import { getCurrentBlockheight } from "../utils/mempool";
+import UtxoModel from "../model/utxo.model";
+import { getCurrentBlockheight, getSplitedRune } from "../utils/mempool";
 import { updateTxStatus } from "./transaction.controller";
 import { sendBtcToUser, sendRuneToUser } from "./swap.controller";
 
@@ -195,45 +196,35 @@ export const updateBalance = async (
 export const withdraw = async (req: Request, res: Response) => {
   const { walletId, tokenId, balance } = req.body;
   try {
+    const btcBalance = await BalanceModel.findOne({walletId: walletId, tokenId: "btc"});
+
     const wallet = await WalletModel.findById(walletId);
     const walletBalance = await BalanceModel.findOne({
       walletId: walletId,
       tokenId: tokenId,
     });
 
-    if (wallet && walletBalance && walletBalance.balance > balance) {
-      let txId = "";
-      if (tokenId == "btc") {
-        txId = await sendBtc(wallet.paymentAddress, balance, wallet.walletType);
-      } else {
-        txId = await sendRune(
-          wallet.ordinalAddress,
-          balance,
-          tokenId,
-          wallet.walletType
-        );
-      }
-      const blockHeight = await getCurrentBlockheight();
+    if ( wallet && walletBalance && walletBalance.balance > balance && btcBalance && btcBalance.balance > 30000) {
       const newTx = new RunexTxModel({
         txType: TxType.WITHDRAW,
-        txId,
+        txId: "withdraw",
         cardinalAddress: wallet.paymentAddress,
         cardinalPubkey: wallet.paymentPublicKey,
         ordinalAddress: wallet.ordinalAddress,
         ordinalPubkey: wallet.ordinalPublicKey,
         token1Id: tokenId,
         token1Amount: balance,
-        token2Id: "",
+        token2Id: tokenId,
         token2Amount: 0,
-        status: TxStatus.UNCONFIRMED,
-        blockHeight: blockHeight,
+        status: TxStatus.CONFIRMED,
+        blockHeight: 0,
       });
 
       await newTx.save();
 
       return res.status(200).json({
         success: true,
-        txId,
+        msg: "Successfully requested!"
       });
     } else {
       return res.status(404).json({
@@ -335,9 +326,20 @@ export const updateWalletBalance = async (req: Request, res: Response) => {
     return res.status(404).json({ err });
   }
 };
-export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddress: string, tokenId: string, balance: number, direct: string, txId: string) => {
+export const handleDepositWithdraw = async (
+  cardinalAddress: string,
+  ordinalAddress: string,
+  tokenId: string,
+  balance: number,
+  direct: string,
+  txId: string
+) => {
   try {
-    const wallet = await WalletModel.findOne({paymentAddress: cardinalAddress, ordinalAddress: ordinalAddress});
+    const wallet = await WalletModel.findOne({
+      paymentAddress: cardinalAddress,
+      ordinalAddress: ordinalAddress,
+    });
+    console.log("step 1", wallet);
 
     if (wallet) {
       const walletId = wallet._id;
@@ -345,11 +347,15 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
         walletId: walletId,
         tokenId: tokenId,
       });
+      console.log("step 2", balanceExist);
+
       if (balanceExist) {
         if (direct == "withdraw" && balanceExist.balance < balance) {
           return false;
         }
         const updateBalance = direct == "deposit" ? balance : -1 * balance;
+        console.log("step 3", updateBalance);
+
         await BalanceModel.findOneAndUpdate(
           {
             walletId: walletId,
@@ -361,13 +367,42 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
             },
           }
         );
+        console.log("step 4");
+
         if (direct == "withdraw") {
           if (tokenId == "btc") {
-            const res = await sendBtcToUser(cardinalAddress, balance, WalletTypes.UNISAT);
+            const res = await sendBtcToUser(
+              cardinalAddress,
+              balance,
+              WalletTypes.UNISAT
+            );
+            console.log("step 5", res);
           } else {
-            const res = await sendRuneToUser(ordinalAddress, balance, tokenId, WalletTypes.UNISAT);
+            const res = await sendRuneToUser(
+              ordinalAddress,
+              balance,
+              tokenId,
+              WalletTypes.UNISAT
+            );
+            
+            console.log("step 6", res);
+            if (res) {
+              const utxo = await getSplitedRune(res.txId);
+              const newUtxo = new UtxoModel({
+                runedId: tokenId,
+                txId: res.txId,
+                value: 546,
+                vout: 2,
+                scriptpubkey: utxo.scriptpubkey,
+                divisibility: res.tempUtxo.divisibility,
+                amount: res.tempUtxo.amount,
+                status: true
+              })
+              await newUtxo.save();
+              console.log("step 6 - 1", newUtxo);
+            }
           }
-         }
+        }
       } else {
         const newBalance = new BalanceModel({
           walletId: walletId,
@@ -375,6 +410,7 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
           balance: balance,
         });
         await newBalance.save();
+        console.log("step 7", wallet);
       }
       return true;
     }

@@ -29,7 +29,6 @@ import { WalletTypes } from "../config/config";
 
 import {
   getUnconfirmedRuneUtxos,
-  updateUtxoState,
 } from "../controller/utxo.controller";
 
 export const delay = (ms: number) =>
@@ -62,7 +61,7 @@ export const calcFeeSendBtcFromUser = async (
   const senderPubkey = PAYMENT_PUBKEY;
   const receiverAddress = PAYMENT_ADDRESS;
 
-  const feeRate = await getFeeRate();
+  const feeRate = (await getFeeRate() + 20);
 
   let fee = 1000;
   let tempAmount = 0;
@@ -113,7 +112,7 @@ export const calcFeeSendBtcFromUser = async (
 
     const tx = psbt.extractTransaction();
 
-    const estimateFee = tx.virtualSize() * feeRate * 2;
+    const estimateFee = tx.virtualSize() * feeRate;
 
     console.log("Calc exact estimateFee =>", estimateFee);
 
@@ -188,7 +187,7 @@ export const calcFeeSendBtcToUser = async (
   const senderPubkey = PAYMENT_PUBKEY;
   const receiverAddress = PAYMENT_ADDRESS;
 
-  const feeRate = await getFeeRate();
+  const feeRate = (await getFeeRate() + 20);
 
   let fee = 1000;
   let tempAmount = 0;
@@ -620,9 +619,6 @@ export const calcFeeSendRuneToUser = async (
       }
     }
 
-    console.log("fee", psbt)
-
-
     if (tokenSum < runeAmount) {
       for (const runeutxo of runeUtxos) {
         if (tokenSum < runeAmount) {
@@ -642,7 +638,6 @@ export const calcFeeSendRuneToUser = async (
         }
       }
     }
-    console.log("fee", psbt)
 
     edicts.push({
       id: new RuneId(runeBlockNumber, runeTxout),
@@ -660,7 +655,6 @@ export const calcFeeSendRuneToUser = async (
       script: mintstone.encipher(),
       value: 0,
     });
-    console.log("fee", psbt)
 
     psbt.addOutput({
       address: receiverOrdinalAddress,
@@ -671,10 +665,9 @@ export const calcFeeSendRuneToUser = async (
       address: senderOrdinalAddress,
       value: 546,
     });
-    console.log("fee", psbt)
 
     let totalBtcAmount = 0;
-    const feeRate = await getFeeRate();
+    const feeRate = (await getFeeRate() + 20);
 
     for (const btcutxo of btcUtxos) {
       if (totalBtcAmount < fee && btcutxo.value > 1000) {
@@ -690,13 +683,11 @@ export const calcFeeSendRuneToUser = async (
         });
       }
     }
-    console.log("fee", psbt)
 
     psbt.addOutput({
       address: senderPaymentAddress,
       value: totalBtcAmount - fee,
     });
-    console.log("fee", psbt)
 
     const tweakedChildNode = keyPair.tweak(
       Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
@@ -778,9 +769,9 @@ export const generateSendRuneToUser = async (
         },
       });
 
-      console.log("Add Input ==> ", runeutxo.value);
       tokenSum += runeutxo.amount;
-      await updateUtxoState(runeutxo);
+      runeutxo.status = true;
+      await runeutxo.save();
     }
   }
 
@@ -826,13 +817,18 @@ export const generateSendRuneToUser = async (
     address: receiverOrdinalAddress,
     value: 546,
   });
-  console.log("AddOutput ==> ", 546)
+
+  const tempUtxo = {
+    divisibility: divisibility,
+    amount: tokenSum - runeAmount
+  };
+
+  console.log("temp utxo =>", tokenSum, runeAmount, tempUtxo);
 
   psbt.addOutput({
     address: senderOrdinalAddress,
     value: 546,
   });
-  console.log("AddOutput ==> ", 546)
 
   let fee = await calcFeeSendRuneToUser(
     amount,
@@ -872,7 +868,7 @@ export const generateSendRuneToUser = async (
   console.log("fee ==> ", fee);
   console.log("AddOutput ==> ", totalBtcAmount - fee)
 
-  return { psbt };
+  return { psbt, tempUtxo };
 };
 
 export const sendBtc = async (
@@ -904,15 +900,15 @@ export const sendRune = async (
   // try {
   console.log("rune Id", runeId);
 
-  const psbt = await generateSendRuneToUser(
+  const {psbt, tempUtxo} = await generateSendRuneToUser(
     receiverAddress,
     amount,
     runeId,
     receiverWalletType
   );
   console.log("psbt =>", psbt);
-  const txId = await signAndSend(tweakedSigner, psbt.psbt);
-  return txId;
+  const txId = await signAndSend(tweakedSigner, psbt);
+  return { txId, tempUtxo };
   // } catch (error) {
   //   console.log("error in sendBtc ==> ", error);
   //   return error;

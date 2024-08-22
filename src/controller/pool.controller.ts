@@ -9,7 +9,10 @@ import { TxStatus, TxType } from "../config/config";
 import { getEstimatePool } from "../utils/pool";
 import { getCurrentBlockheight } from "../utils/mempool";
 
-const getWalletId = async (paymentAddress: string, ordinalAddress: string) => {
+export const getWalletId = async (
+  paymentAddress: string,
+  ordinalAddress: string
+) => {
   try {
     const res = await WalletModel.findOne({
       paymentAddress: paymentAddress,
@@ -37,11 +40,9 @@ export const addLiquidity = async (
   token1Amount: number,
   token2Id: string,
   token2Amount: number,
-  nick1: string,
-  nick2: string
 ) => {
   try {
-    const poolRes = await PoolModel.findOne({
+    let poolRes = await PoolModel.findOne({
       token1Id: token1Id,
       token2Id: token2Id,
     });
@@ -70,24 +71,26 @@ export const addLiquidity = async (
     } else {
       lp = Math.floor(Math.sqrt(token1Amount * token2Amount));
 
-      const newPool = new PoolModel({
+      poolRes = new PoolModel({
         token1Id,
         token2Id,
         token1Balance: token1Amount,
         token2Balance: token2Amount,
-        nick1,
-        nick2,
         totalLpBalance: lp,
       });
 
-      await newPool.save();
+      await poolRes.save();
     }
 
-    const walletIdRes = await getWalletId(paymentAddress, ordinalAddress);
-    if (walletIdRes?.success) {
+    const wallet = await WalletModel.findOne({
+      paymentAddress: paymentAddress,
+      ordinalAddress: ordinalAddress,
+    });
+    if (wallet) {
       await PoolBalance.findOneAndUpdate(
         {
-          walletId: walletIdRes.walletId,
+          walletId: wallet._id,
+          poolId: poolRes._id,
         },
         {
           $inc: {
@@ -98,7 +101,7 @@ export const addLiquidity = async (
 
       await BalanceModel.findOneAndUpdate(
         {
-          walletId: walletIdRes.walletId,
+          walletId: wallet._id,
           tokenId: token1Id,
         },
         {
@@ -110,7 +113,7 @@ export const addLiquidity = async (
 
       await BalanceModel.findOneAndUpdate(
         {
-          walletId: walletIdRes.walletId,
+          walletId: wallet._id,
           tokenId: token2Id,
         },
         {
@@ -121,16 +124,9 @@ export const addLiquidity = async (
       );
     }
 
-    return {
-      success: true,
-      lp,
-    };
+    return true;
   } catch (error) {
     console.log("Add liquidity error=>", error);
-    return {
-      success: false,
-      error,
-    };
   }
 };
 
@@ -148,10 +144,7 @@ export const removeLiquidity = async (
     });
     if (poolRes) {
       if (lpTokensToBurn <= 0 || lpTokensToBurn > poolRes.totalLpBalance) {
-        return {
-          success: false,
-          msg: "Invalid lp token amount",
-        };
+        return false;
       }
 
       const token1Amount =
@@ -173,12 +166,15 @@ export const removeLiquidity = async (
         }
       );
 
-      const walletIdRes = await getWalletId(paymentAddress, ordinalAddress);
+      const wallet = await WalletModel.findOne({
+        paymentAddress: paymentAddress,
+        ordinalAddress: ordinalAddress
+      })
 
-      if (walletIdRes?.success) {
+      if (wallet) {
         await BalanceModel.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             tokenId: token1Id,
           },
           {
@@ -190,7 +186,7 @@ export const removeLiquidity = async (
 
         await BalanceModel.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             tokenId: token2Id,
           },
           {
@@ -202,7 +198,7 @@ export const removeLiquidity = async (
 
         await PoolBalance.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             poolId: poolRes._id,
           },
           {
@@ -212,22 +208,13 @@ export const removeLiquidity = async (
           }
         );
       }
+      return true;
     } else {
-      return {
-        success: false,
-        msg: "Pool not found!",
-      };
+      return false;
     }
-
-    return {
-      success: true,
-    };
   } catch (error) {
     console.log("Add liquidity error=>", error);
-    return {
-      success: false,
-      error,
-    };
+    return false;
   }
 };
 
@@ -275,19 +262,19 @@ export const getPoolList = async (req: Request, res: Response) => {
 };
 
 export const getPoolBalanceList = async (req: Request, res: Response) => {
-    try {
-        const { walletId } = req.body;
-        const list = await PoolBalance.find({
-            walletId: walletId
-        });
-        return res.status(200).json({
-            success: true,
-            poolBalanceList: list
-        })
-    } catch (error) {
-        console.log("Get Pool Balance List Error =>", error);
-    }
-}
+  try {
+    const { walletId } = req.body;
+    const list = await PoolBalance.find({
+      walletId: walletId,
+    });
+    return res.status(200).json({
+      success: true,
+      poolBalanceList: list,
+    });
+  } catch (error) {
+    console.log("Get Pool Balance List Error =>", error);
+  }
+};
 
 export const createPool = async (req: Request, res: Response) => {
   try {
@@ -366,53 +353,53 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token2Amount,
       status: TxStatus.CONFIRMED,
       blockHeight: 0,
-    })
+    });
 
     await newTx.save();
 
     return res.status(200).json({
-        success: true,
-        msg: "Successfully requested!"
-    })
+      success: true,
+      msg: "Successfully requested!",
+    });
   } catch (error) {
     console.log("Add liquidity request=>", error);
   }
 };
 
 export const removeLiquidityRequest = async (req: Request, res: Response) => {
-    try {
-        const {
-          cardinalAddress,
-          cardinalPubkey,
-          ordinalAddress,
-          ordinalPubkey,
-          token1Id,
-          token1Amount,
-          token2Id,
-        } = req.body;
+  try {
+    const {
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+    } = req.body;
 
-        const newTx = new RunexTxModel({
-          txType: TxType.LIQUIDITY_REMOVE,
-          txId: "Remove Liquidity",
-          cardinalAddress,
-          cardinalPubkey,
-          ordinalAddress,
-          ordinalPubkey,
-          token1Id,
-          token1Amount,
-          token2Id,
-          token2Amount: 0,
-          status: TxStatus.CONFIRMED,
-          blockHeight: 0,
-        })
-    
-        await newTx.save();
-    
-        return res.status(200).json({
-            success: true,
-            msg: "Successfully requested!"
-        });
-      } catch (error) {
-        console.log("Remove liquidity request=>", error);
-      }
-}
+    const newTx = new RunexTxModel({
+      txType: TxType.LIQUIDITY_REMOVE,
+      txId: "Remove Liquidity",
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+      token2Amount: 0,
+      status: TxStatus.CONFIRMED,
+      blockHeight: 0,
+    });
+
+    await newTx.save();
+
+    return res.status(200).json({
+      success: true,
+      msg: "Successfully requested!",
+    });
+  } catch (error) {
+    console.log("Remove liquidity request=>", error);
+  }
+};

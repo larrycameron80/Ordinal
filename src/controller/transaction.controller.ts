@@ -70,7 +70,7 @@ export const updateTxStatus = async (txId: string, status: string) => {
   try {
     const res = await RunexTXModel.updateOne(
       {
-        txId,
+        _id: txId,
       },
       {
         status: status,

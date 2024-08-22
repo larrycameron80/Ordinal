@@ -10,6 +10,7 @@ import {
   TEST_MODE,
   TxType,
   TxStatus,
+  WalletTypes,
 } from "../config/config";
 const RUNEX_RUNE_ID = "";
 import {
@@ -25,6 +26,7 @@ import RunexTxModel from "../model/transaction.model";
 import BalanceModel from "../model/balance.model";
 import { getCurrentBlockheight } from "../utils/mempool";
 import { updateTxStatus } from "./transaction.controller";
+import { sendBtcToUser, sendRuneToUser } from "./swap.controller";
 
 initEccLib(ecc as any);
 declare const window: any;
@@ -345,7 +347,7 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
       });
       if (balanceExist) {
         if (direct == "withdraw" && balanceExist.balance < balance) {
-          return;
+          return false;
         }
         const updateBalance = direct == "deposit" ? balance : -1 * balance;
         await BalanceModel.findOneAndUpdate(
@@ -359,6 +361,13 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
             },
           }
         );
+        if (direct == "withdraw") {
+          if (tokenId == "btc") {
+            const res = await sendBtcToUser(cardinalAddress, balance, WalletTypes.UNISAT);
+          } else {
+            const res = await sendRuneToUser(ordinalAddress, balance, tokenId, WalletTypes.UNISAT);
+          }
+         }
       } else {
         const newBalance = new BalanceModel({
           walletId: walletId,
@@ -367,7 +376,7 @@ export const handleDepositWithdraw = async (cardinalAddress: string, ordinalAddr
         });
         await newBalance.save();
       }
-      await updateTxStatus(txId,TxStatus.PROCESSED);
+      return true;
     }
   } catch (error) {
     console.log("Deposit Withdraw Error =>", error);

@@ -10,6 +10,7 @@ import { handleSwap } from "../controller/swap.controller";
 import { handleWithdraw, updateBalance } from "../controller/wallet.controller";
 import { getRecentTransactions } from "./mempool";
 import { handleDepositWithdraw } from "../controller/wallet.controller";
+import { addLiquidity, removeLiquidity } from "../controller/pool.controller";
 
 const getTransactionStatus = async (txId: string) => {
   const url = `${MEMPOOLAPI_URL}/tx/${txId}/status`;
@@ -28,13 +29,9 @@ export const handleTransaction = async () => {
       for (let runexTx of runexTxList) {
         if (runexTx.status == TxStatus.UNCONFIRMED) {
           for (const tx of txList) {
-            if (tx.id == runexTx.txId) {
-              if (tx.status.confirmed == true) {
-                await updateTxStatus(runexTx.txId, TxStatus.CONFIRMED);
-                runexTx.status = TxStatus.CONFIRMED;
-              } else {
-                txFlag = false;
-              }
+            if (tx.id == runexTx.txId && tx.status.confirmed == true) {
+              runexTx.status = TxStatus.CONFIRMED;
+              await runexTx.save();
             }
           }
         }
@@ -43,8 +40,11 @@ export const handleTransaction = async () => {
       for (const runexTx of runexTxList) {
         const txType = runexTx.txType;
         if (txType == TxType.SWAP) {
+          if (runexTx.status == TxStatus.UNCONFIRMED) {
+            txFlag = false;
+          }
           if (txFlag) {
-            await handleSwap(
+            const res = await handleSwap(
               runexTx.cardinalAddress,
               runexTx.ordinalAddress,
               runexTx.token1Id,
@@ -53,15 +53,44 @@ export const handleTransaction = async () => {
               txType,
               runexTx.txId
             );
+            if (res) {
+              runexTx.status = TxStatus.PROCESSED;
+              await runexTx.save();
+            }
           }
         } else if (txType == TxType.DEPOSIT) {
-          if (!txFlag) {
+          if (runexTx.status == TxStatus.UNCONFIRMED) {
+            txFlag = false;
+          }
+          if (txFlag) {
+            const res = await handleDepositWithdraw(
+              runexTx.cardinalAddress,
+              runexTx.ordinalAddress,
+              runexTx.token1Id,
+              runexTx.token1Amount,
+              "deposit",
+              runexTx.txId
+            );
+            if (res) {
+              runexTx.status = TxStatus.PROCESSED;
+              await runexTx.save();
+            }
           }
         } else if (txType == TxType.WITHDRAW) {
-          if (!txFlag) {
+          const res = await handleDepositWithdraw(
+            runexTx.cardinalAddress,
+            runexTx.ordinalAddress,
+            runexTx.token1Id,
+            runexTx.token1Amount,
+            "withdraw",
+            runexTx.txId
+          );
+          if (res) {
+            runexTx.status = TxStatus.PROCESSED;
+            await runexTx.save();
           }
         } else if (txType == TxType.INSTANT_SWAP) {
-          await handleSwap(
+          const res = await handleSwap(
             runexTx.cardinalAddress,
             runexTx.ordinalAddress,
             runexTx.token1Id,
@@ -70,10 +99,22 @@ export const handleTransaction = async () => {
             txType,
             runexTx.txId
           );
+          if (res) {
+            runexTx.status = TxStatus.PROCESSED;
+            await runexTx.save();
+          }
         } else if (txType == TxType.LIQUIDITY_ADD) {
-          await handleDepositWithdraw(runexTx.cardinalAddress, runexTx.ordinalAddress, runexTx.token1Id, runexTx.token1Amount, "deposit", runexTx.txId);
+          const res = await addLiquidity(runexTx.cardinalAddress, runexTx.ordinalAddress, runexTx.token1Id, runexTx.token1Amount, runexTx.token2Id, runexTx.token2Amount);
+          if (res) {
+            runexTx.status = TxStatus.PROCESSED;
+            await runexTx.save();
+          }
         } else if (txType == TxType.LIQUIDITY_REMOVE) {
-          await handleDepositWithdraw(runexTx.cardinalAddress, runexTx.ordinalAddress, runexTx.token1Id, runexTx.token1Amount, "withdraw", runexTx.txId);
+          const res = await removeLiquidity(runexTx.cardinalAddress, runexTx.ordinalAddress, runexTx.token1Id, runexTx.token2Id, runexTx.token1Amount);
+          if (res) {
+            runexTx.status = TxStatus.PROCESSED;
+            await runexTx.save();
+          }
         }
       }
     }

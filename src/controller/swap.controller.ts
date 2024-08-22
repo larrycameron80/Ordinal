@@ -20,7 +20,6 @@ import {
 } from "../config/config";
 import axios from "axios";
 import { getCurrentBlockheight } from "../utils/mempool";
-import { updateTxStatus } from "./transaction.controller";
 import { combinePsbt } from "../service/psbt.service";
 import PoolModel from "../model/pool.model";
 import BalanceModel from "../model/balance.model";
@@ -158,8 +157,7 @@ export const handleSwap = async (
         );
         console.log("step 7");
       }
-      console.log("step 8", txId, TxStatus.PROCESSED);
-      await updateTxStatus(txId, TxStatus.PROCESSED);
+      return true;
     }
   } catch (error) {
     console.log("Handle Swap Request Error ", error);

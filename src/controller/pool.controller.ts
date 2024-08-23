@@ -46,31 +46,36 @@ export const addLiquidity = async (
       token1Id: token1Id,
       token2Id: token2Id,
     });
+    console.log("poolRes")
     let lp = 0;
+
     if (poolRes) {
       lp = Math.floor(
         Math.min(
           (token1Amount / poolRes.token1Balance) * poolRes.totalLpBalance,
-          (token1Amount / poolRes.token1Balance) * poolRes.totalLpBalance
+          (token2Amount / poolRes.token2Balance) * poolRes.totalLpBalance
         )
       );
 
-      await PoolModel.findOneAndUpdate(
+      console.log("lp =>", lp);
+
+      const upPoolRes = await PoolModel.findOneAndUpdate(
         {
           token1Id: token1Id,
           token2Id: token2Id,
         },
         {
           $inc: {
-            token1Balance: token1Amount,
-            token2Balance: token2Amount,
-            totalLpBalance: lp,
+            token1Balance: token1Amount * 1,
+            token2Balance: token2Amount * 1,
+            totalLpBalance: lp * 1,
           },
         }
       );
+      console.log("upPoolRes", upPoolRes);
     } else {
       lp = Math.floor(Math.sqrt(token1Amount * token2Amount));
-
+      console.log("lp 2=>", lp);
       poolRes = new PoolModel({
         token1Id,
         token2Id,
@@ -80,24 +85,34 @@ export const addLiquidity = async (
       });
 
       await poolRes.save();
+
     }
 
     const wallet = await WalletModel.findOne({
       paymentAddress: paymentAddress,
       ordinalAddress: ordinalAddress,
     });
+    console.log(wallet);
     if (wallet) {
-      await PoolBalance.findOneAndUpdate(
+      let poolBalRes = await PoolBalance.findOne(
         {
           walletId: wallet._id,
           poolId: poolRes._id,
-        },
-        {
-          $inc: {
-            lpBalance: lp,
-          },
         }
       );
+      if (poolBalRes) {
+        poolBalRes.lpBalance += lp;
+        await poolBalRes.save();
+      } else {
+        poolBalRes = new PoolBalance({
+          walletId: wallet._id,
+          poolId: poolRes._id,
+          lpBalance: lp
+        });
+        await poolBalRes.save();
+      }
+
+      console.log("poolBalRes", poolBalRes);
 
       await BalanceModel.findOneAndUpdate(
         {
@@ -142,17 +157,20 @@ export const removeLiquidity = async (
       token1Id: token1Id,
       token2Id: token2Id,
     });
+    console.log("poolRes", poolRes);
     if (poolRes) {
       if (lpTokensToBurn <= 0 || lpTokensToBurn > poolRes.totalLpBalance) {
         return false;
       }
 
       const token1Amount =
-        (lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance;
+        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance);
       const token2Amount =
-        (lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance;
+        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance);
+    console.log("token amounts", token1Amount, token2Amount);
 
-      await PoolModel.findOneAndUpdate(
+
+      const upPool = await PoolModel.findOneAndUpdate(
         {
           token1Id: token1Id,
           token2Id: token2Id,
@@ -165,6 +183,8 @@ export const removeLiquidity = async (
           },
         }
       );
+
+      console.log("upPool", upPool);
 
       const wallet = await WalletModel.findOne({
         paymentAddress: paymentAddress,
@@ -314,7 +334,7 @@ export const getEstimateLpAmount = async (req: Request, res: Response) => {
       console.log("lp", lp);
       return res.status(200).json({
         success: true,
-        lp,
+        lp: Math.floor(lp),
       });
     } else {
       return res.status(200).json({
@@ -340,6 +360,7 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token2Amount,
     } = req.body;
 
+    console.log(req.body);
     const newTx = new RunexTxModel({
       txType: TxType.LIQUIDITY_ADD,
       txId: "Add Liquidity",
@@ -355,8 +376,9 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       blockHeight: 0,
     });
 
-    await newTx.save();
 
+    const res1 = await newTx.save();
+    console.log(newTx, res1);
     return res.status(200).json({
       success: true,
       msg: "Successfully requested!",

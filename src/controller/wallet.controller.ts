@@ -387,19 +387,29 @@ export const handleDepositWithdraw = async (
             
             console.log("step 6", res);
             if (res) {
-              const utxo = await getSplitedRune(res.txId);
-              const newUtxo = new UtxoModel({
-                runedId: tokenId,
-                txId: res.txId,
-                value: 546,
-                vout: 2,
-                scriptpubkey: utxo.scriptpubkey,
-                divisibility: res.tempUtxo.divisibility,
-                amount: res.tempUtxo.amount,
-                status: true
+              await BalanceModel.findOneAndUpdate({
+                walletId: walletId,
+                tokenId: "btc"
+              }, {
+                $inc : {
+                  balance: res.tempUtxo.fee * -1
+                }
               })
-              await newUtxo.save();
-              console.log("step 6 - 1", newUtxo);
+              if (res.tempUtxo.amount != 0) {
+                const utxo = await getSplitedRune(res.txId);
+                const newUtxo = new UtxoModel({
+                  runedId: tokenId,
+                  txId: res.txId,
+                  value: 546,
+                  vout: 2,
+                  scriptpubkey: utxo.scriptpubkey,
+                  divisibility: res.tempUtxo.divisibility,
+                  amount: res.tempUtxo.amount,
+                  status: true
+                })
+                await newUtxo.save();
+                console.log("step 6 - 1", newUtxo);
+              }
             }
           }
         }

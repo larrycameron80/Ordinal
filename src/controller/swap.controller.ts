@@ -110,6 +110,7 @@ export const handleSwap = async (
         );
         let receiveAmountTemp = pool.token1Balance - newToken1Balance;
         fee = Math.floor((receiveAmountTemp * PLATFORM_FEE) / 100);
+        receiveAmount = receiveAmountTemp - fee;
       }
       console.log("step 1");
       await updateAdminBalance(fee);
@@ -118,7 +119,7 @@ export const handleSwap = async (
       pool.token2Balance = newToken2Balance;
 
       await pool.save();
-      console.log("step 3");
+      console.log("step 3", token1Amount, swapAmount, fee, receiveAmount);
 
       if (txType == TxType.SWAP) {
         
@@ -130,7 +131,7 @@ export const handleSwap = async (
             token2Id,
             WalletTypes.UNISAT
           );
-          if (res) {
+          if (res && res.tempUtxo.amount != 0) {
             const utxo = await getSplitedRune(res.txId);
             const newUtxo = new UtxoModel({
               runedId: token2Id,
@@ -158,12 +159,22 @@ export const handleSwap = async (
           paymentAddress: cardinalAddress,
           ordinalAddress: ordinalAddress,
         });
-        const tokenId = token1Id == "btc" ? token1Id : token2Id;
         console.log("step 6");
         await BalanceModel.findOneAndUpdate(
           {
             walletId: wallet?._id,
-            tokenId: tokenId,
+            tokenId: token1Id,
+          },
+          {
+            $inc: {
+              balance: token1Amount * -1,
+            },
+          }
+        );
+        await BalanceModel.findOneAndUpdate(
+          {
+            walletId: wallet?._id,
+            tokenId: token2Id,
           },
           {
             $inc: {
@@ -272,6 +283,7 @@ export const sendBtcToUser = async (
     console.log("Send Btc to User Error =>", error);
   }
 };
+
 export const sendRuneToUser = async (
   receiverAddress: string,
   amount: number,
@@ -342,11 +354,12 @@ export const getEstimateAmount = async (req: Request, res: Response) => {
         );
         estimateAmount = token1Balance - temp;
       }
-      console.log(estimateAmount);
+      
+
 
       return res.status(200).json({
         success: true,
-        estimateAmount,
+        estimateAmount: Math.floor(estimateAmount),
       });
     } else {
       return res.status(200).json({

@@ -27,9 +27,7 @@ import { tweakSigner } from "../service/localWallet";
 import { getUtxosByTxId } from "./mempool";
 import { WalletTypes } from "../config/config";
 
-import {
-  getUnconfirmedRuneUtxos,
-} from "../controller/utxo.controller";
+import { getUnconfirmedRuneUtxos } from "../controller/utxo.controller";
 
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -61,19 +59,16 @@ export const calcFeeSendBtcFromUser = async (
   const senderPubkey = PAYMENT_PUBKEY;
   const receiverAddress = PAYMENT_ADDRESS;
 
-  const feeRate = (await getFeeRate() + 20);
+  const feeRate = (await getFeeRate()) + 20;
 
   let fee = 1000;
   let tempAmount = 0;
   while (1) {
     tempAmount = 0;
     const psbt = new Bitcoin.Psbt({ network: network });
-    console.log("Calc exact fee =>", fee);
     for (const utxo of btcUtxos) {
       if (tempAmount < amount + fee && utxo.value > 1000) {
         tempAmount += utxo.value;
-        console.log(utxo.scriptpubkey);
-        console.log(keyPair.publicKey.subarray(1, 33));
 
         psbt.addInput({
           hash: utxo.txid,
@@ -90,15 +85,19 @@ export const calcFeeSendBtcFromUser = async (
       }
     }
 
+
+
     psbt.addOutput({
-      address: receiverAddress,
+      address: receiverAddress as string,
       value: amount,
     });
 
-    psbt.addOutput({
-      address: senderAddress as string,
-      value: tempAmount - amount - fee,
-    });
+    if (tempAmount > tempAmount - amount - fee) {
+      psbt.addOutput({
+        address: senderAddress as string,
+        value: tempAmount - amount - fee,
+      });
+    }
 
     const tweakedChildNode = keyPair.tweak(
       Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
@@ -113,8 +112,6 @@ export const calcFeeSendBtcFromUser = async (
     const tx = psbt.extractTransaction();
 
     const estimateFee = tx.virtualSize() * feeRate;
-
-    console.log("Calc exact estimateFee =>", estimateFee);
 
     if (fee == estimateFee) {
       fee = estimateFee;
@@ -132,15 +129,15 @@ export const generateSendBtcFromUser = async (
   senderAddress: string,
   senderPubkey: string,
   receiverAddress: string,
-  amount: number,
+  btcAmount: number,
   walletType: string
 ) => {
   const psbt = new Bitcoin.Psbt({ network: network });
-
-  await delay(15000);
+  const amount = btcAmount * 1;
   const btcUtxos = await getBtcUtxoByAddress(senderAddress as string);
 
   let fee = await calcFeeSendBtcFromUser(amount, btcUtxos, walletType);
+  // let fee = 30000;
 
   let tempAmount = 0;
   const signIndexes: number[] = [];
@@ -167,10 +164,15 @@ export const generateSendBtcFromUser = async (
     value: amount,
   });
 
-  psbt.addOutput({
-    address: senderAddress,
-    value: tempAmount - amount - fee,
-  });
+  console.log("xxxxx =>", tempAmount, amount, fee, psbt);
+
+  if (tempAmount > amount + fee) {
+    psbt.addOutput({
+      address: senderAddress,
+      value: tempAmount - amount - fee,
+    });
+  }
+  console.log("xxxxx =>", tempAmount, amount, fee, psbt);
 
   return {
     psbt: psbt.toHex(),
@@ -187,7 +189,7 @@ export const calcFeeSendBtcToUser = async (
   const senderPubkey = PAYMENT_PUBKEY;
   const receiverAddress = PAYMENT_ADDRESS;
 
-  const feeRate = (await getFeeRate() + 20);
+  const feeRate = (await getFeeRate()) + 20;
 
   let fee = 1000;
   let tempAmount = 0;
@@ -218,11 +220,14 @@ export const calcFeeSendBtcToUser = async (
       address: receiverAddress,
       value: amount - fee,
     });
+    console.log("amount", tempAmount, amount, fee);
 
-    psbt.addOutput({
-      address: senderAddress as string,
-      value: tempAmount - amount - fee,
-    });
+    if (tempAmount - amount > 0) {
+      psbt.addOutput({
+        address: senderAddress as string,
+        value: tempAmount - amount,
+      });
+    }
 
     const tweakedChildNode = keyPair.tweak(
       Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
@@ -236,7 +241,7 @@ export const calcFeeSendBtcToUser = async (
 
     const tx = psbt.extractTransaction();
 
-    const estimateFee = tx.virtualSize() * feeRate * 2;
+    const estimateFee = tx.virtualSize() * feeRate;
 
     console.log("Calc exact estimateFee =>", estimateFee);
 
@@ -254,7 +259,7 @@ export const calcFeeSendBtcToUser = async (
 
 export const generateSendBtcToUser = async (
   receiverAddress: string,
-  amount: number,
+  btcAmount: number,
   receiverWalletType: string
 ) => {
   delay(1500);
@@ -262,7 +267,7 @@ export const generateSendBtcToUser = async (
   const senderPubkey = PAYMENT_PUBKEY;
   const psbt = new Bitcoin.Psbt({ network: network });
   const btcUtxos = await getBtcUtxoByAddress(senderAddress);
-
+  const amount = btcAmount * 1;
   let tempAmount = 0;
   let fee = await calcFeeSendBtcToUser(amount, btcUtxos, receiverWalletType);
   console.log("fee =>", fee, tempAmount, amount);
@@ -294,10 +299,12 @@ export const generateSendBtcToUser = async (
     value: amount - fee,
   });
 
-  psbt.addOutput({
-    address: senderAddress,
-    value: tempAmount - amount,
-  });
+  if (tempAmount > amount) {
+    psbt.addOutput({
+      address: senderAddress,
+      value: tempAmount - amount,
+    });
+  }
 
   console.log("psbt =>", psbt);
 
@@ -359,14 +366,16 @@ export const calcFeeSendRuneFromUser = async (
     edicts.push({
       id: new RuneId(runeBlockNumber, runeTxout),
       amount: runeAmount,
-      output: 2,
-    });
-
-    edicts.push({
-      id: new RuneId(runeBlockNumber, runeTxout),
-      amount: tokenSum - runeAmount,
       output: 1,
     });
+
+    if (tokenSum > runeAmount) {
+      edicts.push({
+        id: new RuneId(runeBlockNumber, runeTxout),
+        amount: tokenSum - runeAmount,
+        output: 2,
+      });
+    }
 
     console.log("Calc fee", runeAmount, tokenSum, edicts);
 
@@ -382,10 +391,12 @@ export const calcFeeSendRuneFromUser = async (
       value: 546,
     });
 
-    psbt.addOutput({
-      address: receiverOrdinalAddress,
-      value: 546,
-    });
+    if (tokenSum > runeAmount) {
+      psbt.addOutput({
+        address: receiverOrdinalAddress,
+        value: 546,
+      });
+    }
 
     let totalBtcAmount = 0;
 
@@ -408,10 +419,12 @@ export const calcFeeSendRuneFromUser = async (
       }
     }
 
-    psbt.addOutput({
-      address: senderPaymentAddress,
-      value: totalBtcAmount - fee,
-    });
+    if (totalBtcAmount > fee) {
+      psbt.addOutput({
+        address: senderPaymentAddress,
+        value: totalBtcAmount - fee,
+      });
+    }
 
     const tweakedChildNode = keyPair.tweak(
       Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
@@ -450,26 +463,13 @@ export const generateSendRuneFromUser = async (
   runeId: string,
   walletType: string
 ) => {
-  await delay(1500);
-
-  console.log(
-    senderPaymentAddress,
-    senderPaymnetPubKey,
-    senderOrdinalAddress,
-    senderOrdinalPubkey,
-    amount,
-    receiverOrdinalAddress,
-    runeId,
-    walletType
-  );
-
   const btcUtxos = await getBtcUtxoByAddress(senderPaymentAddress);
   const runeUtxos = await getRuneUtxoByAddress(senderOrdinalAddress, runeId);
 
   const paymentSignIndexs: number[] = [];
   const ordinalSignIndexs: number[] = [];
 
-  const runeAmount = amount;
+  const runeAmount = amount * 1;
 
   if (runeUtxos.tokenSum < runeAmount) {
     throw "Invalid Amount";
@@ -506,14 +506,16 @@ export const generateSendRuneFromUser = async (
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
     amount: runeAmount,
-    output: 2,
-  });
-
-  edicts.push({
-    id: new RuneId(runeBlockNumber, runeTxout),
-    amount: tokenSum - runeAmount,
     output: 1,
   });
+
+  if (tokenSum > runeAmount) {
+    edicts.push({
+      id: new RuneId(runeBlockNumber, runeTxout),
+      amount: tokenSum - runeAmount,
+      output: 2,
+    });
+  }
 
   const mintstone = new Runestone(edicts, none(), none(), none());
 
@@ -523,14 +525,16 @@ export const generateSendRuneFromUser = async (
   });
 
   psbt.addOutput({
-    address: senderOrdinalAddress,
-    value: 546,
-  });
-
-  psbt.addOutput({
     address: receiverOrdinalAddress,
     value: 546,
   });
+
+  if (tokenSum > runeAmount) {
+    psbt.addOutput({
+      address: senderOrdinalAddress,
+      value: 546,
+    });
+  }
 
   const fee = await calcFeeSendRuneFromUser(
     amount,
@@ -562,10 +566,12 @@ export const generateSendRuneFromUser = async (
 
   if (totalBtcAmount < fee) throw "Btc balance is not enough";
 
-  psbt.addOutput({
-    address: senderPaymentAddress,
-    value: totalBtcAmount - fee,
-  });
+  if (totalBtcAmount > fee) {
+    psbt.addOutput({
+      address: senderPaymentAddress,
+      value: totalBtcAmount - fee,
+    });
+  }
 
   return {
     psbt: psbt.toHex(),
@@ -581,7 +587,6 @@ export const calcFeeSendRuneToUser = async (
   runeUtxos: any,
   unconfirmedRuneUtxos: any
 ) => {
-
   const senderPaymentAddress = PAYMENT_ADDRESS;
   const senderPaymnetPubKey = PAYMENT_PUBKEY;
   const senderOrdinalAddress = ORDINAL_ADDRESS;
@@ -597,11 +602,30 @@ export const calcFeeSendRuneToUser = async (
   while (1) {
     const psbt = new Bitcoin.Psbt({ network: network });
 
-    console.log("fee", psbt)
+    console.log("fee", psbt);
 
     let tokenSum = 0;
     const edicts: any = [];
-    for (const runeutxo of unconfirmedRuneUtxos) {
+    // for (const runeutxo of unconfirmedRuneUtxos) {
+    //   if (tokenSum < runeAmount) {
+    //     psbt.addInput({
+    //       hash: runeutxo.txid,
+    //       index: runeutxo.vout,
+    //       tapInternalKey: Buffer.from(
+    //         senderOrdinalPubkey as string,
+    //         "hex"
+    //       ).slice(1, 33),
+    //       witnessUtxo: {
+    //         value: runeutxo.value,
+    //         script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+    //       },
+    //     });
+    //     tokenSum += runeutxo.amount;
+    //   }
+    // }
+
+    // if (tokenSum < runeAmount) {
+    for (const runeutxo of runeUtxos) {
       if (tokenSum < runeAmount) {
         psbt.addInput({
           hash: runeutxo.txid,
@@ -618,37 +642,22 @@ export const calcFeeSendRuneToUser = async (
         tokenSum += runeutxo.amount;
       }
     }
-
-    if (tokenSum < runeAmount) {
-      for (const runeutxo of runeUtxos) {
-        if (tokenSum < runeAmount) {
-          psbt.addInput({
-            hash: runeutxo.txid,
-            index: runeutxo.vout,
-            tapInternalKey: Buffer.from(
-              senderOrdinalPubkey as string,
-              "hex"
-            ).slice(1, 33),
-            witnessUtxo: {
-              value: runeutxo.value,
-              script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
-            },
-          });
-          tokenSum += runeutxo.amount;
-        }
-      }
-    }
+    // }
 
     edicts.push({
       id: new RuneId(runeBlockNumber, runeTxout),
       amount: runeAmount,
-      output: 2,
-    });
-    edicts.push({
-      id: new RuneId(runeBlockNumber, runeTxout),
-      amount: tokenSum - runeAmount,
       output: 1,
     });
+
+    if (tokenSum > runeAmount) {
+      edicts.push({
+        id: new RuneId(runeBlockNumber, runeTxout),
+        amount: tokenSum - runeAmount,
+        output: 2,
+      });
+    }
+
     const mintstone = new Runestone(edicts, none(), none(), none());
 
     psbt.addOutput({
@@ -661,13 +670,15 @@ export const calcFeeSendRuneToUser = async (
       value: 546,
     });
 
-    psbt.addOutput({
-      address: senderOrdinalAddress,
-      value: 546,
-    });
+    if (tokenSum > runeAmount) {
+      psbt.addOutput({
+        address: senderOrdinalAddress,
+        value: 546,
+      });
+    }
 
     let totalBtcAmount = 0;
-    const feeRate = (await getFeeRate() + 20);
+    const feeRate = (await getFeeRate()) + 20;
 
     for (const btcutxo of btcUtxos) {
       if (totalBtcAmount < fee && btcutxo.value > 1000) {
@@ -684,10 +695,12 @@ export const calcFeeSendRuneToUser = async (
       }
     }
 
-    psbt.addOutput({
-      address: senderPaymentAddress,
-      value: totalBtcAmount - fee,
-    });
+    if (totalBtcAmount > fee) {
+      psbt.addOutput({
+        address: senderPaymentAddress,
+        value: totalBtcAmount - fee,
+      });
+    }
 
     const tweakedChildNode = keyPair.tweak(
       Bitcoin.crypto.taggedHash("TapTweak", keyPair.publicKey.subarray(1, 33))
@@ -701,7 +714,7 @@ export const calcFeeSendRuneToUser = async (
 
     const tx = psbt.extractTransaction();
 
-    const estimateFee = tx.virtualSize() * feeRate * 2;
+    const estimateFee = tx.virtualSize() * feeRate;
 
     if (fee == estimateFee) {
       fee = estimateFee;
@@ -736,15 +749,16 @@ export const generateSendRuneToUser = async (
     runeId
   );
 
-  const runeAmount = amount;
-  if (unconfirmedRuneUtxos.length != 0) {
-    runeUtxos = runeUtxos.filter((utxo: any) => {
-      let temp = unconfirmedRuneUtxos.filter((x: any) => {
-        return x.txId == utxo.txId && x.vout == utxo.vout;
-      });
-      return temp.length;
-    });
-  }
+  // console.log("here", runeUtxos, divisibility);
+  const runeAmount = amount * 1;
+  // if (unconfirmedRuneUtxos.length != 0) {
+  //   runeUtxos = runeUtxos.filter((utxo: any) => {
+  //     let temp = unconfirmedRuneUtxos.filter((x: any) => {
+  //       return x.txId == utxo.txId && x.vout == utxo.vout;
+  //     });
+  //     return temp.length == 0;
+  //   });
+  // }
 
   const runeBlockNumber = parseInt(runeId.split(":")[0]);
   const runeTxout = parseInt(runeId.split(":")[1]);
@@ -754,7 +768,31 @@ export const generateSendRuneToUser = async (
   let tokenSum = 0;
   const edicts: any = [];
 
-  for (const runeutxo of unconfirmedRuneUtxos) {
+  // console.log("here", runeAmount, runeUtxos, unconfirmedRuneUtxos);
+
+  // for (const runeutxo of unconfirmedRuneUtxos) {
+  //   if (tokenSum < runeAmount) {
+  //     psbt.addInput({
+  //       hash: runeutxo.txid,
+  //       index: runeutxo.vout,
+  //       tapInternalKey: Buffer.from(senderOrdinalPubkey as string, "hex").slice(
+  //         1,
+  //         33
+  //       ),
+  //       witnessUtxo: {
+  //         value: runeutxo.value,
+  //         script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
+  //       },
+  //     });
+
+  //     tokenSum += runeutxo.amount;
+  //     runeutxo.status = true;
+  //     await runeutxo.save();
+  //   }
+  // }
+
+  // if (tokenSum < runeAmount) {
+  for (const runeutxo of runeUtxos) {
     if (tokenSum < runeAmount) {
       psbt.addInput({
         hash: runeutxo.txid,
@@ -768,44 +806,23 @@ export const generateSendRuneToUser = async (
           script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
         },
       });
-
       tokenSum += runeutxo.amount;
-      runeutxo.status = true;
-      await runeutxo.save();
     }
   }
-
-  if (tokenSum < runeAmount) {
-    for (const runeutxo of runeUtxos) {
-      if (tokenSum < runeAmount) {
-        psbt.addInput({
-          hash: runeutxo.txid,
-          index: runeutxo.vout,
-          tapInternalKey: Buffer.from(
-            senderOrdinalPubkey as string,
-            "hex"
-          ).slice(1, 33),
-          witnessUtxo: {
-            value: runeutxo.value,
-            script: Buffer.from(runeutxo.scriptpubkey as string, "hex"),
-          },
-        });
-        tokenSum += runeutxo.amount;
-        console.log("Add Input ==> ", runeutxo.value);
-      }
-    }
-  }
+  // }
 
   edicts.push({
     id: new RuneId(runeBlockNumber, runeTxout),
     amount: runeAmount,
-    output: 2,
-  });
-  edicts.push({
-    id: new RuneId(runeBlockNumber, runeTxout),
-    amount: tokenSum - runeAmount,
     output: 1,
   });
+  if (tokenSum - runeAmount > 0) {
+    edicts.push({
+      id: new RuneId(runeBlockNumber, runeTxout),
+      amount: tokenSum - runeAmount,
+      output: 2,
+    });
+  }
   const mintstone = new Runestone(edicts, none(), none(), none());
 
   psbt.addOutput({
@@ -818,17 +835,12 @@ export const generateSendRuneToUser = async (
     value: 546,
   });
 
-  const tempUtxo = {
-    divisibility: divisibility,
-    amount: tokenSum - runeAmount
-  };
-
-  console.log("temp utxo =>", tokenSum, runeAmount, tempUtxo);
-
-  psbt.addOutput({
-    address: senderOrdinalAddress,
-    value: 546,
-  });
+  if (tokenSum > runeAmount) {
+    psbt.addOutput({
+      address: senderOrdinalAddress,
+      value: 546,
+    });
+  }
 
   let fee = await calcFeeSendRuneToUser(
     amount,
@@ -838,7 +850,11 @@ export const generateSendRuneToUser = async (
     unconfirmedRuneUtxos
   );
 
-  console.log("psbt =>", fee);
+  const tempUtxo = {
+    divisibility: divisibility,
+    amount: tokenSum - runeAmount,
+    fee: fee,
+  };
 
   let totalBtcAmount = 0;
 
@@ -859,14 +875,15 @@ export const generateSendRuneToUser = async (
   }
 
   if (totalBtcAmount < fee) throw "Btc balance is not enough";
-
-  psbt.addOutput({
-    address: senderPaymentAddress,
-    value: totalBtcAmount - fee,
-  });
+  if (totalBtcAmount > fee) {
+    psbt.addOutput({
+      address: senderPaymentAddress,
+      value: totalBtcAmount - fee,
+    });
+  }
   console.log("totalBtcAmount ==> ", totalBtcAmount);
   console.log("fee ==> ", fee);
-  console.log("AddOutput ==> ", totalBtcAmount - fee)
+  console.log("AddOutput ==> ", totalBtcAmount - fee);
 
   return { psbt, tempUtxo };
 };
@@ -900,7 +917,7 @@ export const sendRune = async (
   // try {
   console.log("rune Id", runeId);
 
-  const {psbt, tempUtxo} = await generateSendRuneToUser(
+  const { psbt, tempUtxo } = await generateSendRuneToUser(
     receiverAddress,
     amount,
     runeId,

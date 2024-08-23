@@ -145,98 +145,98 @@ export const addLiquidity = async (
   }
 };
 
-export const removeLiquidity = async (
-  paymentAddress: string,
-  ordinalAddress: string,
-  token1Id: string,
-  token2Id: string,
-  lpTokensToBurn: number
-) => {
-  try {
-    const poolRes = await PoolModel.findOne({
-      token1Id: token1Id,
-      token2Id: token2Id,
-    });
-    console.log("poolRes", poolRes);
-    if (poolRes) {
-      if (lpTokensToBurn <= 0 || lpTokensToBurn > poolRes.totalLpBalance) {
-        return false;
-      }
+// export const removeLiquidity = async (
+//   paymentAddress: string,
+//   ordinalAddress: string,
+//   token1Id: string,
+//   token2Id: string,
+//   lpTokensToBurn: number
+// ) => {
+//   try {
+//     const poolRes = await PoolModel.findOne({
+//       token1Id: token1Id,
+//       token2Id: token2Id,
+//     });
+//     console.log("poolRes", poolRes);
+//     if (poolRes) {
+//       if (lpTokensToBurn <= 0 || lpTokensToBurn > poolRes.totalLpBalance) {
+//         return false;
+//       }
 
-      const token1Amount =
-        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance);
-      const token2Amount =
-        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance);
-    console.log("token amounts", token1Amount, token2Amount);
+//       const token1Amount =
+//         Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance);
+//       const token2Amount =
+//         Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance);
+//     console.log("token amounts", token1Amount, token2Amount);
 
 
-      const upPool = await PoolModel.findOneAndUpdate(
-        {
-          token1Id: token1Id,
-          token2Id: token2Id,
-        },
-        {
-          $inc: {
-            token1Balance: token1Amount * -1,
-            token2Balance: token2Amount * -1,
-            totalLpBalance: lpTokensToBurn * -1,
-          },
-        }
-      );
+//       const upPool = await PoolModel.findOneAndUpdate(
+//         {
+//           token1Id: token1Id,
+//           token2Id: token2Id,
+//         },
+//         {
+//           $inc: {
+//             token1Balance: token1Amount * -1,
+//             token2Balance: token2Amount * -1,
+//             totalLpBalance: lpTokensToBurn * -1,
+//           },
+//         }
+//       );
 
-      console.log("upPool", upPool);
+//       console.log("upPool", upPool);
 
-      const wallet = await WalletModel.findOne({
-        paymentAddress: paymentAddress,
-        ordinalAddress: ordinalAddress
-      })
+//       const wallet = await WalletModel.findOne({
+//         paymentAddress: paymentAddress,
+//         ordinalAddress: ordinalAddress
+//       })
 
-      if (wallet) {
-        await BalanceModel.findOneAndUpdate(
-          {
-            walletId: wallet._id,
-            tokenId: token1Id,
-          },
-          {
-            $inc: {
-              balance: token1Amount,
-            },
-          }
-        );
+//       if (wallet) {
+//         await BalanceModel.findOneAndUpdate(
+//           {
+//             walletId: wallet._id,
+//             tokenId: token1Id,
+//           },
+//           {
+//             $inc: {
+//               balance: token1Amount,
+//             },
+//           }
+//         );
 
-        await BalanceModel.findOneAndUpdate(
-          {
-            walletId: wallet._id,
-            tokenId: token2Id,
-          },
-          {
-            $inc: {
-              balance: token2Amount,
-            },
-          }
-        );
+//         await BalanceModel.findOneAndUpdate(
+//           {
+//             walletId: wallet._id,
+//             tokenId: token2Id,
+//           },
+//           {
+//             $inc: {
+//               balance: token2Amount,
+//             },
+//           }
+//         );
 
-        await PoolBalance.findOneAndUpdate(
-          {
-            walletId: wallet._id,
-            poolId: poolRes._id,
-          },
-          {
-            $inc: {
-              lpBalance: lpTokensToBurn * -1,
-            },
-          }
-        );
-      }
-      return true;
-    } else {
-      return false;
-    }
-  } catch (error) {
-    console.log("Add liquidity error=>", error);
-    return false;
-  }
-};
+//         await PoolBalance.findOneAndUpdate(
+//           {
+//             walletId: wallet._id,
+//             poolId: poolRes._id,
+//           },
+//           {
+//             $inc: {
+//               lpBalance: lpTokensToBurn * -1,
+//             },
+//           }
+//         );
+//       }
+//       return true;
+//     } else {
+//       return false;
+//     }
+//   } catch (error) {
+//     console.log("Add liquidity error=>", error);
+//     return false;
+//   }
+// };
 
 export const getBalance = async (token1Id: string, token2Id: string) => {
   try {

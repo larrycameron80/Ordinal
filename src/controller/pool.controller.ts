@@ -9,7 +9,10 @@ import { TxStatus, TxType } from "../config/config";
 import { getEstimatePool } from "../utils/pool";
 import { getCurrentBlockheight } from "../utils/mempool";
 
-const getWalletId = async (paymentAddress: string, ordinalAddress: string) => {
+export const getWalletId = async (
+  paymentAddress: string,
+  ordinalAddress: string
+) => {
   try {
     const res = await WalletModel.findOne({
       paymentAddress: paymentAddress,
@@ -37,68 +40,83 @@ export const addLiquidity = async (
   token1Amount: number,
   token2Id: string,
   token2Amount: number,
-  nick1: string,
-  nick2: string
 ) => {
   try {
-    const poolRes = await PoolModel.findOne({
+    let poolRes = await PoolModel.findOne({
       token1Id: token1Id,
       token2Id: token2Id,
     });
+    console.log("poolRes")
     let lp = 0;
+
     if (poolRes) {
       lp = Math.floor(
         Math.min(
           (token1Amount / poolRes.token1Balance) * poolRes.totalLpBalance,
-          (token1Amount / poolRes.token1Balance) * poolRes.totalLpBalance
+          (token2Amount / poolRes.token2Balance) * poolRes.totalLpBalance
         )
       );
 
-      await PoolModel.findOneAndUpdate(
+      console.log("lp =>", lp);
+
+      const upPoolRes = await PoolModel.findOneAndUpdate(
         {
           token1Id: token1Id,
           token2Id: token2Id,
         },
         {
           $inc: {
-            token1Balance: token1Amount,
-            token2Balance: token2Amount,
-            totalLpBalance: lp,
+            token1Balance: token1Amount * 1,
+            token2Balance: token2Amount * 1,
+            totalLpBalance: lp * 1,
           },
         }
       );
+      console.log("upPoolRes", upPoolRes);
     } else {
       lp = Math.floor(Math.sqrt(token1Amount * token2Amount));
-
-      const newPool = new PoolModel({
+      console.log("lp 2=>", lp);
+      poolRes = new PoolModel({
         token1Id,
         token2Id,
         token1Balance: token1Amount,
         token2Balance: token2Amount,
-        nick1,
-        nick2,
         totalLpBalance: lp,
       });
 
-      await newPool.save();
+      await poolRes.save();
+
     }
 
-    const walletIdRes = await getWalletId(paymentAddress, ordinalAddress);
-    if (walletIdRes?.success) {
-      await PoolBalance.findOneAndUpdate(
+    const wallet = await WalletModel.findOne({
+      paymentAddress: paymentAddress,
+      ordinalAddress: ordinalAddress,
+    });
+    console.log(wallet);
+    if (wallet) {
+      let poolBalRes = await PoolBalance.findOne(
         {
-          walletId: walletIdRes.walletId,
-        },
-        {
-          $inc: {
-            lpBalance: lp,
-          },
+          walletId: wallet._id,
+          poolId: poolRes._id,
         }
       );
+      if (poolBalRes) {
+        poolBalRes.lpBalance += lp;
+        await poolBalRes.save();
+      } else {
+        poolBalRes = new PoolBalance({
+          walletId: wallet._id,
+          poolId: poolRes._id,
+          lpBalance: lp
+        });
+        await poolBalRes.save();
+      }
+
+      console.log("poolBalRes", poolBalRes);
 
       await BalanceModel.findOneAndUpdate(
         {
-          walletId: walletIdRes.walletId,
+          walletId: wallet._id,
           tokenId: token1Id,
         },
         {
@@ -110,7 +128,7 @@ export const addLiquidity = async (
 
       await BalanceModel.findOneAndUpdate(
         {
-          walletId: walletIdRes.walletId,
+          walletId: wallet._id,
           tokenId: token2Id,
         },
         {
@@ -121,16 +139,9 @@ export const addLiquidity = async (
       );
     }
 
-    return {
-      success: true,
-      lp,
-    };
+    return true;
   } catch (error) {
     console.log("Add liquidity error=>", error);
-    return {
-      success: false,
-      error,
-    };
   }
 };
 
@@ -146,20 +157,20 @@ export const removeLiquidity = async (
       token1Id: token1Id,
       token2Id: token2Id,
     });
+    console.log("poolRes", poolRes);
     if (poolRes) {
       if (lpTokensToBurn <= 0 || lpTokensToBurn > poolRes.totalLpBalance) {
-        return {
-          success: false,
-          msg: "Invalid lp token amount",
-        };
+        return false;
       }
 
       const token1Amount =
-        (lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance;
+        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token1Balance);
       const token2Amount =
-        (lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance;
+        Math.floor((lpTokensToBurn / poolRes.totalLpBalance) * poolRes.token2Balance);
+    console.log("token amounts", token1Amount, token2Amount);
 
-      await PoolModel.findOneAndUpdate(
+
+      const upPool = await PoolModel.findOneAndUpdate(
         {
           token1Id: token1Id,
           token2Id: token2Id,
@@ -173,12 +184,17 @@ export const removeLiquidity = async (
         }
       );
 
-      const walletIdRes = await getWalletId(paymentAddress, ordinalAddress);
+      console.log("upPool", upPool);
 
-      if (walletIdRes?.success) {
+      const wallet = await WalletModel.findOne({
+        paymentAddress: paymentAddress,
+        ordinalAddress: ordinalAddress
+      })
+
+      if (wallet) {
         await BalanceModel.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             tokenId: token1Id,
           },
           {
@@ -190,7 +206,7 @@ export const removeLiquidity = async (
 
         await BalanceModel.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             tokenId: token2Id,
           },
           {
@@ -202,7 +218,7 @@ export const removeLiquidity = async (
 
         await PoolBalance.findOneAndUpdate(
           {
-            walletId: walletIdRes.walletId,
+            walletId: wallet._id,
             poolId: poolRes._id,
           },
           {
@@ -212,22 +228,13 @@ export const removeLiquidity = async (
           }
         );
       }
+      return true;
     } else {
-      return {
-        success: false,
-        msg: "Pool not found!",
-      };
+      return false;
     }
-
-    return {
-      success: true,
-    };
   } catch (error) {
     console.log("Add liquidity error=>", error);
-    return {
-      success: false,
-      error,
-    };
+    return false;
   }
 };
 
@@ -275,19 +282,19 @@ export const getPoolList = async (req: Request, res: Response) => {
 };
 
 export const getPoolBalanceList = async (req: Request, res: Response) => {
-    try {
-        const { walletId } = req.body;
-        const list = await PoolBalance.find({
-            walletId: walletId
-        });
-        return res.status(200).json({
-            success: true,
-            poolBalanceList: list
-        })
-    } catch (error) {
-        console.log("Get Pool Balance List Error =>", error);
-    }
-}
+  try {
+    const { walletId } = req.body;
+    const list = await PoolBalance.find({
+      walletId: walletId,
+    });
+    return res.status(200).json({
+      success: true,
+      poolBalanceList: list,
+    });
+  } catch (error) {
+    console.log("Get Pool Balance List Error =>", error);
+  }
+};
 
 export const createPool = async (req: Request, res: Response) => {
   try {
@@ -327,7 +334,7 @@ export const getEstimateLpAmount = async (req: Request, res: Response) => {
       console.log("lp", lp);
       return res.status(200).json({
         success: true,
-        lp,
+        lp: Math.floor(lp),
       });
     } else {
       return res.status(200).json({
@@ -353,6 +360,7 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token2Amount,
     } = req.body;
 
+    console.log(req.body);
     const newTx = new RunexTxModel({
       txType: TxType.LIQUIDITY_ADD,
       txId: "Add Liquidity",
@@ -366,53 +374,54 @@ export const addLiquidityRequest = async (req: Request, res: Response) => {
       token2Amount,
       status: TxStatus.CONFIRMED,
       blockHeight: 0,
-    })
+    });
 
-    await newTx.save();
 
+    const res1 = await newTx.save();
+    console.log(newTx, res1);
     return res.status(200).json({
-        success: true,
-        msg: "Successfully requested!"
-    })
+      success: true,
+      msg: "Successfully requested!",
+    });
   } catch (error) {
     console.log("Add liquidity request=>", error);
   }
 };
 
 export const removeLiquidityRequest = async (req: Request, res: Response) => {
-    try {
-        const {
-          cardinalAddress,
-          cardinalPubkey,
-          ordinalAddress,
-          ordinalPubkey,
-          token1Id,
-          token1Amount,
-          token2Id,
-        } = req.body;
+  try {
+    const {
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+    } = req.body;
 
-        const newTx = new RunexTxModel({
-          txType: TxType.LIQUIDITY_REMOVE,
-          txId: "Remove Liquidity",
-          cardinalAddress,
-          cardinalPubkey,
-          ordinalAddress,
-          ordinalPubkey,
-          token1Id,
-          token1Amount,
-          token2Id,
-          token2Amount: 0,
-          status: TxStatus.CONFIRMED,
-          blockHeight: 0,
-        })
-    
-        await newTx.save();
-    
-        return res.status(200).json({
-            success: true,
-            msg: "Successfully requested!"
-        });
-      } catch (error) {
-        console.log("Remove liquidity request=>", error);
-      }
-}
+    const newTx = new RunexTxModel({
+      txType: TxType.LIQUIDITY_REMOVE,
+      txId: "Remove Liquidity",
+      cardinalAddress,
+      cardinalPubkey,
+      ordinalAddress,
+      ordinalPubkey,
+      token1Id,
+      token1Amount,
+      token2Id,
+      token2Amount: 0,
+      status: TxStatus.CONFIRMED,
+      blockHeight: 0,
+    });
+
+    await newTx.save();
+
+    return res.status(200).json({
+      success: true,
+      msg: "Successfully requested!",
+    });
+  } catch (error) {
+    console.log("Remove liquidity request=>", error);
+  }
+};

@@ -1,5 +1,5 @@
 import axios, { type AxiosError } from "axios";
-import { MEMPOOLAPI_URL } from "../config/config";
+import { MEMPOOLAPI_URL, PAYMENT_ADDRESS, TEST_MODE } from "../config/config";
 import mempoolJS from "@mempool/mempool.js";
 import { handleTransaction } from "./txQueue";
 
@@ -20,6 +20,19 @@ export const getScriptPubkey = async (
     (output: any) => output.scriptpubkey_address === address
   );
   return output.scriptpubkey;
+};
+
+export const getRecentTransactions = async () => {
+  try {
+    const url = `https://mempool.space/${
+      TEST_MODE ? "testnet/" : ""
+    }api/address/${PAYMENT_ADDRESS}/txs`;
+    const res = await axios.get(url);
+    return res.data;
+  } catch (error) {
+    console.log("Get Recent Transctions Error =>", error);
+    return [];
+  }
 };
 
 export const getUtxos = async (
@@ -84,24 +97,25 @@ const postData = async (
 
 export const getSplitedRune = async (txId: string) => {
   const res = await axios.get(`${MEMPOOLAPI_URL}/tx/${txId}`);
-  return res.data.vout[2]
-}
+  return res.data.vout[2];
+};
 
 export const getUtxosByTxId = async (txId: string) => {
   const res = await axios.get(`${MEMPOOLAPI_URL}/tx/${txId}`);
   const length = res.data.vout.length;
   return res.data.vout.slice(0, length - 1);
-}
+};
 
 export const mempoolSocketInit = async () => {
-  console.log("network =>", process.env.NETWORK);
-  const { bitcoin: { websocket } } = mempoolJS({
-    hostname: 'mempool.space',
-    network: process.env.NETWORK || "testnet"
+  const {
+    bitcoin: { websocket },
+  } = mempoolJS({
+    hostname: "mempool.space",
+    network: process.env.NETWORK || "testnet",
   });
 
   const ws = websocket.initServer({
-    options: ["blocks", "stats", "mempool-blocks", "live-2h-chart"],
+    options: ["blocks"],
   });
 
   ws.on("message", function incoming(data: any) {
@@ -110,4 +124,4 @@ export const mempoolSocketInit = async () => {
       handleTransaction();
     }
   });
-}
+};

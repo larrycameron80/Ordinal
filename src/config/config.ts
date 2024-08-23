@@ -30,6 +30,8 @@ export const ORDINAL_PUBKEY: string = process.env
 export const ORDINAL_PRIVATEKEY: string = process.env
   .ORDINAL_PRIVATE_KEY as string;
 
+export const PLATFORM_FEE = (Number(process.env.FEE) || 0);
+
 export enum WalletTypes {
   UNISAT = "Unisat",
   XVERSE = "Xverse",

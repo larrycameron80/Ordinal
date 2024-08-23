@@ -32,7 +32,7 @@ mongoose
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
     });
-    // mempoolSocketInit();
+    mempoolSocketInit();
   })
   .catch((err) => {
     console.log("Cannot connect to the database! 😭", err);

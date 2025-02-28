@@ -1,51 +1,41 @@
-import express, { Express, Request, Response } from "express";
-import dotenv from "dotenv";
-import mongoose from "mongoose";
-import bodyParser from "body-parser";
-import cors from "cors";
-import poolRouter from "./routes/pool.route";
-import swapRouter from "./routes/swap.route";
-import transactionRouter from "./routes/transaction.route";
-import walletRouter from "./routes/wallet.route";
-import runeRouter from "./routes/rune.route";
-import testRouter from "./routes/test.route";
-import { mempoolSocketInit } from "./utils/mempool";
+import express from 'express';
+import mongoose from 'mongoose';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import transactionRoutes from './routes/transactionRoutes';
+import dotenv from 'dotenv';
+import path = require('path');
+import mempoolRoutes from './routes/mempoolRoutes';
 
 dotenv.config();
 
-const app: Express = express();
-const port = process.env.PORT || 9000;
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-app.use(
-  cors({
-    credentials: true,
-    origin: true,
-  })
-);
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Middleware
+app.use(express.static(path.join(__dirname, "./public")));
+// Parse incoming JSON requests using body-parser
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 
-mongoose
-  .connect(process.env.MONGO_URI as string)
-  .then(async () => {
-    console.log("Connected to the database! ❤️");
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    });
-    mempoolSocketInit();
-  })
-  .catch((err) => {
-    console.log("Cannot connect to the database! 😭", err);
-    process.exit();
-  });
+// Routes
+app.use('/api', transactionRoutes);
+app.use('/api/mempool', mempoolRoutes)
 
-app.get("/", (req: Request, res: Response) => {
-  res.send("<h3>Raffle API is up and running.</h3>");
-});
+// Debug log for MongoDB URI
+console.log("MongoDB URI:", process.env.MONGODB_URI);
 
-app.use("/api/wallet/", walletRouter);
-app.use("/api/pool/", poolRouter);
-app.use("/api/transaction/", transactionRouter);
-app.use("/api/swap/", swapRouter);
-app.use("/api/rune/", runeRouter);
-app.use("/api/test/", testRouter);
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI as string)
+    .then(() => {
+        console.log("MongoDB connected");
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    })
+    .catch(err => console.error("MongoDB connection error:", err));
+
+
+    

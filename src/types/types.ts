@@ -21,6 +21,13 @@ export interface IRuneUtxo {
   divisibility: number;
 }
 
+export interface ITransaction extends Document {
+  transactionId: string;
+  chainId: string;
+  receiverAddress:string;
+  receiverChainId:string;
+}
+
 export enum AddressType {
   P2WPKH = "p2wpkh",
   P2SH = "p2sh",

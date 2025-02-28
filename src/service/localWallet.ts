@@ -19,25 +19,7 @@ export const tweakSigner = (signer: any, opts: any) => {
   if (opts == null) opts = {};
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  let privateKey = signer.privateKey;
-  if (!privateKey) {
-    throw new Error("Private key is required for tweaking signer!");
-  }
-  if (signer.publicKey[0] == 3) {
-    privateKey = ecc.privateNegate(privateKey);
-  }
-
-  const tweakedPrivateKey = ecc.privateAdd(
-    privateKey,
-    tapTweakHash(toXOnly(signer.publicKey), opts.tweakHash)
-  );
-  if (!tweakedPrivateKey) {
-    throw new Error("Invalid tweaked private key!");
-  }
-
-  return ECPair.fromPrivateKey(Buffer.from(tweakedPrivateKey), {
-    network: opts.network,
-  });
+  //here set tewakSinger for tapscript
 };
 
 export function toPsbtNetwork(networkType: number) {
@@ -129,55 +111,7 @@ export class LocalWallet {
     const _opts = opts || {
       autoFinalized: true,
     };
-    const psbtNetwork = this.network;
-    const toSignInputs: any = [];
-
-    console.log(psbt.data.inputs);
-    psbt.data.inputs.forEach((v, index) => {
-      let script = null;
-      let value = 0;
-      if (v.witnessUtxo) {
-        script = v.witnessUtxo.script;
-        value = v.witnessUtxo.value;
-      } else if (v.nonWitnessUtxo) {
-        const tx = bitcoin.Transaction.fromBuffer(v.nonWitnessUtxo);
-        const output = tx.outs[psbt.txInputs[index].index];
-        script = output.script;
-        value = output.value;
-      }
-      const isSigned = v.finalScriptSig || v.finalScriptWitness;
-      if (script && !isSigned) {
-        const address = bitcoin.address.fromOutputScript(script, psbtNetwork);
-        if (this.address == address) {
-          toSignInputs.push({
-            index,
-            publicKey: this.pubkey,
-            sighashTypes: v.sighashType ? [v.sighashType] : undefined,
-          });
-        }
-      }
-    });
-
-    const _inputs = _opts.inputs || toSignInputs;
-    if (_inputs.length == 0) {
-      throw new Error("no input to sign");
-    }
-    _inputs.forEach((input: any) => {
-      const keyPair = this.keyPair;
-      if (isTaprootInput(psbt.data.inputs[input.index])) {
-        const signer = tweakSigner(keyPair, opts);
-        psbt.signInput(input.index, signer, input.sighashTypes);
-      } else {
-        const signer = keyPair;
-        psbt.signInput(input.index, signer, input.sighashTypes);
-      }
-      if (_opts.autoFinalized != false) {
-        // console.log(input.index);
-        // psbt.validateSignaturesOfInput(input.index, validator);
-        psbt.finalizeInput(input.index);
-      }
-    });
-    return psbt;
+   // set singpsbt
   }
 
   getPublicKey() {

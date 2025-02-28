@@ -14,5 +14,5 @@ Rune Swap is a decentralized exchange (DEX) facilitating seamless token swaps on
 
 
 ## Contact me
--Twitter:  [@defai_maxi](https://x.com/defai_maxi)
--Telegram: [@rhettjel](https://t.me/rhettjel)
+- Twitter:  [@defai_maxi](https://x.com/defai_maxi)
+- Telegram: [@rhettjel](https://t.me/rhettjel)

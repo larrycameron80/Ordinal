@@ -1,7 +1,7 @@
 
-# Ordinals Rune Marketplace & Swap Backend | Bitcoin Ordinals DEX
+# Ordinals Rune Marketplace Swap Backend 
 
-Ordinals Rune Marketplace & Swap Backend is a Bitcoin-based DEX for trading Ordinals Runes, enabling seamless peer-to-peer swaps, liquidity pools, and decentralized trading of Ordinal assets on the Bitcoin network. Built for scalability, security, and efficiency, this backend powers a trustless and permissionless marketplace for Rune assets.
+Ordinals Rune Marketplace Swap Backend is for trading Ordinals Runes, enabling seamless peer-to-peer swaps, liquidity pools, and decentralized trading of Ordinal assets on the Bitcoin network. Built for scalability, security, and efficiency, this backend powers a trustless and permissionless marketplace for Rune assets.
 ## Features
 
 ## Features
